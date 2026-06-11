@@ -44,9 +44,6 @@ matrix:
       - cargo check --target wasm32-unknown-unknown --no-default-features
       - cargo check                                 --no-default-features --features console_error_panic_hook
       - cargo check --target wasm32-unknown-unknown --no-default-features --features console_error_panic_hook
-      - cargo check                                 --no-default-features --features "console_error_panic_hook wee_alloc"
-      - cargo check --target wasm32-unknown-unknown --no-default-features --features "console_error_panic_hook wee_alloc"
-
   # Builds on beta.
   - rust: beta
     env: RUST_BACKTRACE=1

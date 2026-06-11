@@ -6,7 +6,6 @@ Master registry for development tracks and architectural upgrades.
 
 | Track ID | Status | Objective | Owner |
 | :--- | :--- | :--- | :--- |
-| **015** | Planning | Quick Security Wins — pyo3 CVE, wee_alloc removal, cbindgen/atty |  |
 | **016** | Planning | jieba Dict Decoupling — remove include-flate / proc-macro-error2 build dep |  |
 | **017** | Planning | Serialization Dep Modernization — postcard → bincode in swapvec + fast2s |  |
 | **018** | Planning | graph/graph_builder fxhash Elimination — vendor + rustc-hash swap |  |
@@ -17,6 +16,7 @@ Master registry for development tracks and architectural upgrades.
 
 | Track ID | Objective |
 | :--- | :--- |
+| **015** | Quick Security Wins — pyo3 CVE, wee_alloc removal, cbindgen/atty |
 | **014** | HNSW Engine Hardening — Two-phase removal + Miette error propagation |
 | **013** | Dependency Transitivity — swapvec path dependency for downstream lz4_flex fix |
 | **001** | Infrastructure & Security Patches (`lz4_flex`, `tokio`) — *partial: patch not transitive* |

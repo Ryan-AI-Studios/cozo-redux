@@ -133,7 +133,7 @@ char *cozo_import_from_backup(int32_t db_id,
 void cozo_free_str(char *s);
 
 #ifdef __cplusplus
-} // extern "C"
-#endif // __cplusplus
+}  // extern "C"
+#endif  // __cplusplus
 
-#endif /* COZO_C_H */
+#endif  /* COZO_C_H */

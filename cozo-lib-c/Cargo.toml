@@ -41,4 +41,4 @@ io-uring = ["cozo/io-uring"]
 cozo = { version = "0.8.0", path = "../cozo-core", default-features = false }
 
 [build-dependencies]
-cbindgen = "0.26.0"
+cbindgen = "0.27"

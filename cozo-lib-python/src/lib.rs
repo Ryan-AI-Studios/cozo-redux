@@ -6,6 +6,8 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
+#![allow(deprecated)]
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use miette::{IntoDiagnostic, Report, Result};
@@ -443,8 +445,8 @@ fn eval_expressions(
     params: &Bound<'_, PyDict>,
     bindings: &Bound<'_, PyDict>,
 ) -> PyResult<PyObject> {
-    let params = convert_params(params).unwrap();
-    let bindings = convert_params(bindings).unwrap();
+    let params = convert_params(params)?;
+    let bindings = convert_params(bindings)?;
     match evaluate_expressions(query, &params, &bindings) {
         Ok(v) => Ok(value_to_py(v, py)),
         Err(err) => {
@@ -464,7 +466,7 @@ fn variables(
     query: &str,
     params: &Bound<'_, PyDict>,
 ) -> PyResult<BTreeSet<String>> {
-    let params = convert_params(params).unwrap();
+    let params = convert_params(params)?;
     match get_variables(query, &params) {
         Ok(rows) => Ok(rows),
         Err(err) => {
