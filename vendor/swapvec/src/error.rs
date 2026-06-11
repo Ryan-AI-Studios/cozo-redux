@@ -20,7 +20,7 @@ pub enum SwapVecError {
     ///
     /// Take a look at the `Serialize` implementation
     /// of your type `T`.
-    SerializationFailed(postcard::Error),
+    SerializationFailed(String),
     /// Every other possibility
     Other(std::io::ErrorKind),
 }
@@ -36,8 +36,14 @@ impl From<std::io::Error> for SwapVecError {
     }
 }
 
-impl From<postcard::Error> for SwapVecError {
-    fn from(value: postcard::Error) -> Self {
-        SwapVecError::SerializationFailed(value)
+impl From<bincode::error::DecodeError> for SwapVecError {
+    fn from(value: bincode::error::DecodeError) -> Self {
+        SwapVecError::SerializationFailed(value.to_string())
+    }
+}
+
+impl From<bincode::error::EncodeError> for SwapVecError {
+    fn from(value: bincode::error::EncodeError) -> Self {
+        SwapVecError::SerializationFailed(value.to_string())
     }
 }

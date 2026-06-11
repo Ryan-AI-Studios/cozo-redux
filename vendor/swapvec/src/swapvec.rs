@@ -212,7 +212,7 @@ where
         assert!(self.tempfile.is_some());
         let batch: Vec<_> = self.vector.drain(0..self.config.batch_size).collect();
 
-        let buffer = postcard::to_stdvec(&batch)?;
+        let buffer = bincode::serde::encode_to_vec(&batch, bincode::config::standard())?;
         let compressed = self.config.compression.compress(buffer);
         self.tempfile.as_mut().unwrap().write_batch(&compressed)?;
         Ok(())

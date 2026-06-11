@@ -40,10 +40,10 @@ resolver = "2"
 [dependencies.hashbrown]
 version = "0.14"
 
-[dependencies.postcard]
-version = "1.1.1"
-features = ["use-std"]
+[dependencies.bincode]
+version = "2.0.0-rc.3"
+features = ["serde"]
 
-[build-dependencies.postcard]
-version = "1.1.1"
-features = ["use-std"]
+[build-dependencies.bincode]
+version = "2.0.0-rc.3"
+features = ["serde"]
