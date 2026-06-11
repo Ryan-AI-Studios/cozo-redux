@@ -6,6 +6,12 @@ Master registry for development tracks and architectural upgrades.
 
 | Track ID | Status | Objective | Owner |
 | :--- | :--- | :--- | :--- |
+| **015** | Planning | Quick Security Wins — pyo3 CVE, wee_alloc removal, cbindgen/atty |  |
+| **016** | Planning | jieba Dict Decoupling — remove include-flate / proc-macro-error2 build dep |  |
+| **017** | Planning | Serialization Dep Modernization — postcard → bincode in swapvec + fast2s |  |
+| **018** | Planning | graph/graph_builder fxhash Elimination — vendor + rustc-hash swap |  |
+| **019** | Planning | sled → fjall Storage Migration — replace unmaintained sled backend |  |
+| **020** | Planning | tikv-client Remediation — 0.3→0.4 + vendor + tonic 0.10→0.11 |  |
 
 ## Completed Tracks
 
@@ -27,4 +33,4 @@ Master registry for development tracks and architectural upgrades.
 | **011** | HNSW Precision — In-loop predicate filtering with ef expansion |
 
 ---
-*Updated: 2026-05-11*
+*Updated: 2026-06-11*
