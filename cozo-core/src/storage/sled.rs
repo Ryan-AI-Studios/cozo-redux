@@ -7,13 +7,13 @@
  */
 
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::iter;
-use std::iter::Fuse;
 use std::path::Path;
+use std::sync::Arc;
 
-use itertools::Itertools;
+use fjall::{Database, Keyspace, KeyspaceCreateOptions};
 use miette::{miette, IntoDiagnostic, Result};
-use sled::{Batch, Config, Db, IVec, Iter, Mode};
 
 use crate::data::tuple::Tuple;
 use crate::data::value::ValidityTs;
@@ -21,25 +21,29 @@ use crate::runtime::relation::decode_tuple_from_kv;
 use crate::storage::{Storage, StoreTx};
 use crate::utils::{swap_option_result, TempCollector};
 
-/// Creates a Sled database object. Experimental.
+/// Creates a Sled database object (backed by Fjall). Experimental.
 /// You should use [`new_cozo_rocksdb`](crate::new_cozo_rocksdb) or
 /// [`new_cozo_sqlite`](crate::new_cozo_sqlite) instead.
 pub fn new_cozo_sled(path: impl AsRef<Path>) -> Result<crate::Db<SledStorage>> {
-    let db = sled::open(path).into_diagnostic()?;
-    let ret = crate::Db::new(SledStorage { db })?;
+    let db = Database::builder(path.as_ref()).open().into_diagnostic()?;
+    let partition = db
+        .keyspace("default", KeyspaceCreateOptions::default)
+        .into_diagnostic()?;
+    let ret = crate::Db::new(SledStorage {
+        db: Arc::new(db),
+        partition,
+    })?;
 
     ret.initialize()?;
     Ok(ret)
 }
 
-/// Storage engine using Sled
+/// Storage engine using Sled (backed by Fjall)
 #[derive(Clone)]
 pub struct SledStorage {
-    db: Db,
+    db: Arc<Database>,
+    partition: Keyspace,
 }
-
-const PUT_MARKER: u8 = 1;
-const DEL_MARKER: u8 = 0;
 
 impl Storage<'_> for SledStorage {
     type Tx = SledTx;
@@ -50,8 +54,9 @@ impl Storage<'_> for SledStorage {
 
     fn transact(&self, _write: bool) -> Result<Self::Tx> {
         Ok(SledTx {
+            partition: self.partition.clone(),
             db: self.db.clone(),
-            changes: Default::default(),
+            changes: BTreeMap::new(),
         })
     }
 
@@ -74,54 +79,24 @@ impl Storage<'_> for SledStorage {
 }
 
 pub struct SledTx {
-    db: Db,
-    changes: Option<Db>,
-}
-
-impl SledTx {
-    #[inline]
-    fn ensure_changes_db(&mut self) -> Result<()> {
-        if self.changes.is_none() {
-            let db = Config::new()
-                .temporary(true)
-                .mode(Mode::HighThroughput)
-                .use_compression(false)
-                .open()
-                .into_diagnostic()?;
-            self.changes = Some(db)
-        }
-        Ok(())
-    }
+    partition: Keyspace,
+    db: Arc<Database>,
+    changes: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
 impl<'s> StoreTx<'s> for SledTx {
     #[inline]
     fn get(&self, key: &[u8], _for_update: bool) -> Result<Option<Vec<u8>>> {
-        if let Some(changes) = &self.changes {
-            if let Some(val) = changes.get(key).into_diagnostic()? {
-                return if val[0] == DEL_MARKER {
-                    Ok(None)
-                } else {
-                    let data = val[1..].to_vec();
-                    Ok(Some(data))
-                };
-            }
+        if let Some(opt_val) = self.changes.get(key) {
+            return Ok(opt_val.clone());
         }
-        let ret = self.db.get(key).into_diagnostic()?;
+        let ret = self.partition.get(key).into_diagnostic()?;
         Ok(ret.map(|v| v.to_vec()))
     }
 
     #[inline]
     fn put(&mut self, key: &[u8], val: &[u8]) -> Result<()> {
-        self.ensure_changes_db()?;
-        let mut val_to_write = Vec::with_capacity(val.len() + 1);
-        val_to_write.push(PUT_MARKER);
-        val_to_write.extend_from_slice(val);
-        self.changes
-            .as_mut()
-            .unwrap()
-            .insert(key, val_to_write)
-            .into_diagnostic()?;
+        self.changes.insert(key.to_vec(), Some(val.to_vec()));
         Ok(())
     }
 
@@ -131,13 +106,7 @@ impl<'s> StoreTx<'s> for SledTx {
 
     #[inline]
     fn del(&mut self, key: &[u8]) -> Result<()> {
-        self.ensure_changes_db()?;
-        let val_to_write = [PUT_MARKER];
-        self.changes
-            .as_mut()
-            .unwrap()
-            .insert(key, &val_to_write)
-            .into_diagnostic()?;
+        self.changes.insert(key.to_vec(), None);
         Ok(())
     }
 
@@ -150,34 +119,31 @@ impl<'s> StoreTx<'s> for SledTx {
         }
 
         for k_res in to_del.into_iter() {
-            self.db.remove(&k_res).into_diagnostic()?;
+            self.partition.remove(&k_res).into_diagnostic()?;
         }
         Ok(())
     }
 
     #[inline]
     fn exists(&self, key: &[u8], _for_update: bool) -> Result<bool> {
-        if let Some(changes) = &self.changes {
-            if let Some(val) = changes.get(key).into_diagnostic()? {
-                return Ok(val[0] != DEL_MARKER);
-            }
+        if let Some(opt_val) = self.changes.get(key) {
+            return Ok(opt_val.is_some());
         }
-        let ret = self.db.get(key).into_diagnostic()?;
+        let ret = self.partition.get(key).into_diagnostic()?;
         Ok(ret.is_some())
     }
 
     fn commit(&mut self) -> Result<()> {
-        if let Some(changes) = &self.changes {
-            let mut batch = Batch::default();
-            for pair in changes.iter() {
-                let (k, v) = pair.into_diagnostic()?;
-                if v[0] == DEL_MARKER {
-                    batch.remove(&k);
+        if !self.changes.is_empty() {
+            let mut batch = self.db.batch();
+            for (k, opt_v) in &self.changes {
+                if let Some(v) = opt_v {
+                    batch.insert(&self.partition, k, v);
                 } else {
-                    batch.insert(&k, &v[1..]);
+                    batch.remove(&self.partition, k);
                 }
             }
-            self.db.apply_batch(batch).into_diagnostic()?;
+            batch.commit().into_diagnostic()?;
         }
         Ok(())
     }
@@ -190,21 +156,14 @@ impl<'s> StoreTx<'s> for SledTx {
     where
         's: 'a,
     {
-        if let Some(changes) = &self.changes {
-            let change_iter = changes.range(lower..upper).fuse();
-            let db_iter = self.db.range(lower..upper).fuse();
-            Box::new(SledIter {
-                change_iter,
-                db_iter,
-                change_cache: None,
-                db_cache: None,
-            })
-        } else {
-            Box::new(self.db.range(lower..upper).map(|d| {
-                d.into_diagnostic()
-                    .and_then(|(k, v)| decode_tuple_from_kv(&k, &v, None))
-            }))
-        }
+        let changes_iter = self.changes.range(lower.to_vec()..upper.to_vec());
+        let db_iter = self.partition.range(lower.to_vec()..upper.to_vec());
+        Box::new(SledIter {
+            changes_iter,
+            db_iter,
+            change_cache: None,
+            db_cache: None,
+        })
     }
 
     fn range_skip_scan_tuple<'a>(
@@ -226,42 +185,29 @@ impl<'s> StoreTx<'s> for SledTx {
     where
         's: 'a,
     {
-        if let Some(changes) = &self.changes {
-            let change_iter = changes.range(lower..upper).fuse();
-            let db_iter = self.db.range(lower..upper).fuse();
-            Box::new(SledIterRaw {
-                change_iter,
-                db_iter,
-                change_cache: None,
-                db_cache: None,
-            })
-        } else {
-            Box::new(
-                self.db
-                    .range(lower..upper)
-                    .map(|d| d.into_diagnostic())
-                    .map_ok(|(k, v)| (k.to_vec(), v.to_vec())),
-            )
-        }
+        let changes_iter = self.changes.range(lower.to_vec()..upper.to_vec());
+        let db_iter = self.partition.range(lower.to_vec()..upper.to_vec());
+        Box::new(SledIterRaw {
+            changes_iter,
+            db_iter,
+            change_cache: None,
+            db_cache: None,
+        })
     }
 
     fn range_count<'a>(&'a self, lower: &[u8], upper: &[u8]) -> Result<usize>
     where
         's: 'a,
     {
-        Ok(if let Some(changes) = &self.changes {
-            let change_iter = changes.range(lower..upper).fuse();
-            let db_iter = self.db.range(lower..upper).fuse();
-            (SledIterRaw {
-                change_iter,
-                db_iter,
-                change_cache: None,
-                db_cache: None,
-            })
-            .count()
-        } else {
-            self.db.range(lower..upper).count()
-        })
+        let changes_iter = self.changes.range(lower.to_vec()..upper.to_vec());
+        let db_iter = self.partition.range(lower.to_vec()..upper.to_vec());
+        Ok(SledIterRaw {
+            changes_iter,
+            db_iter,
+            change_cache: None,
+            db_cache: None,
+        }
+        .count())
     }
 
     fn total_scan<'a>(&'a self) -> Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + 'a>
@@ -272,25 +218,34 @@ impl<'s> StoreTx<'s> for SledTx {
     }
 }
 
-struct SledIterRaw {
-    change_iter: Fuse<Iter>,
-    db_iter: Fuse<Iter>,
-    change_cache: Option<(IVec, IVec)>,
-    db_cache: Option<(IVec, IVec)>,
+struct SledIterRaw<'a, C, D>
+where
+    C: Iterator<Item = (&'a Vec<u8>, &'a Option<Vec<u8>>)>,
+    D: Iterator<Item = fjall::Guard>,
+{
+    changes_iter: C,
+    db_iter: D,
+    change_cache: Option<(&'a Vec<u8>, &'a Option<Vec<u8>>)>,
+    db_cache: Option<(Vec<u8>, Vec<u8>)>,
 }
 
-impl SledIterRaw {
+impl<'a, C, D> SledIterRaw<'a, C, D>
+where
+    C: Iterator<Item = (&'a Vec<u8>, &'a Option<Vec<u8>>)>,
+    D: Iterator<Item = fjall::Guard>,
+{
     #[inline]
     fn fill_cache(&mut self) -> Result<()> {
         if self.change_cache.is_none() {
-            if let Some(res) = self.change_iter.next() {
-                self.change_cache = Some(res.into_diagnostic()?)
+            if let Some(res) = self.changes_iter.next() {
+                self.change_cache = Some(res);
             }
         }
 
         if self.db_cache.is_none() {
             if let Some(res) = self.db_iter.next() {
-                self.db_cache = Some(res.into_diagnostic()?);
+                let (k, v) = res.into_inner().into_diagnostic()?;
+                self.db_cache = Some((k.to_vec(), v.to_vec()));
             }
         }
 
@@ -305,32 +260,35 @@ impl SledIterRaw {
                 (None, None) => return Ok(None),
                 (Some(_), None) => {
                     let (k, cv) = self.change_cache.take().unwrap();
-                    if cv[0] == DEL_MARKER {
-                        continue;
+                    if let Some(v) = cv {
+                        return Ok(Some((k.clone(), v.clone())));
                     } else {
-                        return Ok(Some((k.to_vec(), cv[1..].to_vec())));
+                        continue;
                     }
                 }
                 (None, Some(_)) => {
-                    let (k, v) = self.db_cache.take().unwrap();
-                    return Ok(Some((k.to_vec(), v.to_vec())));
+                    return Ok(self.db_cache.take());
                 }
-                (Some((ck, _)), Some((dk, _))) => match ck.cmp(dk) {
+                (Some((ck, _)), Some((dk_key, _))) => match ck.as_slice().cmp(dk_key) {
                     Ordering::Less => {
-                        let (k, sv) = self.change_cache.take().unwrap();
-                        if sv[0] == DEL_MARKER {
-                            continue;
+                        let (k, cv) = self.change_cache.take().unwrap();
+                        if let Some(v) = cv {
+                            return Ok(Some((k.clone(), v.clone())));
                         } else {
-                            return Ok(Some((k.to_vec(), sv[1..].to_vec())));
+                            continue;
                         }
                     }
                     Ordering::Greater => {
-                        let (k, v) = self.db_cache.take().unwrap();
-                        return Ok(Some((k.to_vec(), v.to_vec())));
+                        return Ok(self.db_cache.take());
                     }
                     Ordering::Equal => {
-                        self.db_cache.take();
-                        continue;
+                        let (_, cv) = self.change_cache.take().unwrap();
+                        let (dk_k, _) = self.db_cache.take().unwrap();
+                        if let Some(v) = cv {
+                            return Ok(Some((dk_k, v.clone())));
+                        } else {
+                            continue;
+                        }
                     }
                 },
             }
@@ -338,7 +296,11 @@ impl SledIterRaw {
     }
 }
 
-impl Iterator for SledIterRaw {
+impl<'a, C, D> Iterator for SledIterRaw<'a, C, D>
+where
+    C: Iterator<Item = (&'a Vec<u8>, &'a Option<Vec<u8>>)>,
+    D: Iterator<Item = fjall::Guard>,
+{
     type Item = Result<(Vec<u8>, Vec<u8>)>;
 
     #[inline]
@@ -347,25 +309,34 @@ impl Iterator for SledIterRaw {
     }
 }
 
-struct SledIter {
-    change_iter: Fuse<Iter>,
-    db_iter: Fuse<Iter>,
-    change_cache: Option<(IVec, IVec)>,
-    db_cache: Option<(IVec, IVec)>,
+struct SledIter<'a, C, D>
+where
+    C: Iterator<Item = (&'a Vec<u8>, &'a Option<Vec<u8>>)>,
+    D: Iterator<Item = fjall::Guard>,
+{
+    changes_iter: C,
+    db_iter: D,
+    change_cache: Option<(&'a Vec<u8>, &'a Option<Vec<u8>>)>,
+    db_cache: Option<(Vec<u8>, Vec<u8>)>,
 }
 
-impl SledIter {
+impl<'a, C, D> SledIter<'a, C, D>
+where
+    C: Iterator<Item = (&'a Vec<u8>, &'a Option<Vec<u8>>)>,
+    D: Iterator<Item = fjall::Guard>,
+{
     #[inline]
     fn fill_cache(&mut self) -> Result<()> {
         if self.change_cache.is_none() {
-            if let Some(res) = self.change_iter.next() {
-                self.change_cache = Some(res.into_diagnostic()?)
+            if let Some(res) = self.changes_iter.next() {
+                self.change_cache = Some(res);
             }
         }
 
         if self.db_cache.is_none() {
             if let Some(res) = self.db_iter.next() {
-                self.db_cache = Some(res.into_diagnostic()?);
+                let (k, v) = res.into_inner().into_diagnostic()?;
+                self.db_cache = Some((k.to_vec(), v.to_vec()));
             }
         }
 
@@ -380,23 +351,23 @@ impl SledIter {
                 (None, None) => return Ok(None),
                 (Some(_), None) => {
                     let (k, cv) = self.change_cache.take().unwrap();
-                    if cv[0] == DEL_MARKER {
-                        continue;
+                    if let Some(v) = cv {
+                        return Ok(Some(decode_tuple_from_kv(k, v, None)?));
                     } else {
-                        return Ok(Some(decode_tuple_from_kv(&k, &cv[1..], None)?));
+                        continue;
                     }
                 }
                 (None, Some(_)) => {
                     let (k, v) = self.db_cache.take().unwrap();
                     return Ok(Some(decode_tuple_from_kv(&k, &v, None)?));
                 }
-                (Some((ck, _)), Some((dk, _))) => match ck.cmp(dk) {
+                (Some((ck, _)), Some((dk_key, _))) => match ck.as_slice().cmp(dk_key) {
                     Ordering::Less => {
-                        let (k, sv) = self.change_cache.take().unwrap();
-                        if sv[0] == DEL_MARKER {
-                            continue;
+                        let (k, cv) = self.change_cache.take().unwrap();
+                        if let Some(v) = cv {
+                            return Ok(Some(decode_tuple_from_kv(k, v, None)?));
                         } else {
-                            return Ok(Some(decode_tuple_from_kv(&k, &sv[1..], None)?));
+                            continue;
                         }
                     }
                     Ordering::Greater => {
@@ -404,8 +375,13 @@ impl SledIter {
                         return Ok(Some(decode_tuple_from_kv(&k, &v, None)?));
                     }
                     Ordering::Equal => {
-                        self.db_cache.take();
-                        continue;
+                        let (_, cv) = self.change_cache.take().unwrap();
+                        let (dk_k, _) = self.db_cache.take().unwrap();
+                        if let Some(v) = cv {
+                            return Ok(Some(decode_tuple_from_kv(&dk_k, v, None)?));
+                        } else {
+                            continue;
+                        }
                     }
                 },
             }
@@ -413,11 +389,97 @@ impl SledIter {
     }
 }
 
-impl Iterator for SledIter {
+impl<'a, C, D> Iterator for SledIter<'a, C, D>
+where
+    C: Iterator<Item = (&'a Vec<u8>, &'a Option<Vec<u8>>)>,
+    D: Iterator<Item = fjall::Guard>,
+{
     type Item = Result<Tuple>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         swap_option_result(self.next_inner())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn fjall_put_get_round_trip() -> Result<()> {
+        let dir = tempdir().into_diagnostic()?;
+        let db = new_cozo_sled(dir.path())?;
+
+        let tx = db.db.transact(true)?;
+        assert!(tx.get(b"non-existent", false)?.is_none());
+
+        let mut tx = db.db.transact(true)?;
+        tx.put(b"k1", b"v1")?;
+        assert_eq!(tx.get(b"k1", false)?.unwrap(), b"v1");
+
+        // Before commit, not visible globally
+        let tx2 = db.db.transact(false)?;
+        assert!(tx2.get(b"k1", false)?.is_none());
+
+        tx.commit()?;
+
+        let tx3 = db.db.transact(false)?;
+        assert_eq!(tx3.get(b"k1", false)?.unwrap(), b"v1");
+
+        Ok(())
+    }
+
+    #[test]
+    fn fjall_delete_hides_committed_key() -> Result<()> {
+        let dir = tempdir().into_diagnostic()?;
+        let db = new_cozo_sled(dir.path())?;
+
+        let mut tx = db.db.transact(true)?;
+        tx.put(b"k1", b"v1")?;
+        tx.commit()?;
+
+        let mut tx2 = db.db.transact(true)?;
+        tx2.del(b"k1")?;
+        assert!(tx2.get(b"k1", false)?.is_none());
+        tx2.commit()?;
+
+        let tx3 = db.db.transact(false)?;
+        assert!(tx3.get(b"k1", false)?.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn fjall_range_scan_merges_uncommitted_changes() -> Result<()> {
+        let dir = tempdir().into_diagnostic()?;
+        let db = new_cozo_sled(dir.path())?;
+
+        let mut tx = db.db.transact(true)?;
+        tx.put(b"k2", b"v2")?;
+        tx.put(b"k4", b"v4")?;
+        tx.commit()?;
+
+        let mut tx2 = db.db.transact(true)?;
+        tx2.put(b"k1", b"v1")?; // uncommitted insert
+        tx2.del(b"k2")?; // uncommitted delete
+        tx2.put(b"k3", b"v3")?; // uncommitted insert
+                                // k4 remains unchanged
+
+        let items: Vec<_> = tx2.range_scan(b"k0", b"k9").collect::<Result<Vec<_>>>()?;
+        assert_eq!(
+            items,
+            vec![
+                (b"k1".to_vec(), b"v1".to_vec()),
+                (b"k3".to_vec(), b"v3".to_vec()),
+                (b"k4".to_vec(), b"v4".to_vec()),
+            ]
+        );
+
+        let count = tx2.range_count(b"k0", b"k9")?;
+        assert_eq!(count, 3);
+
+        Ok(())
     }
 }

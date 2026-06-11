@@ -53,7 +53,7 @@ wasm = ["uuid/js", "dep:js-sys"]
 ## Sled is slower than Sqlite for the usual workload of Cozo, can use quite a lot of disk space,
 ## and may not be stable enough. In general you should use RocksDB instead.
 ## The Sled engine does not support time travel.
-storage-sled = ["dep:sled"]
+storage-sled = ["dep:fjall"]
 ## Enables the [TiKV](https://tikv.org/) client backend.
 ## The only reason that you may want to use this is that your data does not fit in a single machine.
 ## This engine is orders of magnitude slower than every other engine for graph traversals, due to the
@@ -122,7 +122,7 @@ rayon = ">=1.10.0, <1.12.0"
 minreq = { version = "2.11.2", features = ["https-rustls"], optional = true }
 cozorocks = { path = "../cozorocks", version = "0.1.7", optional = true }
 rocksdb = { version = "0.22.0", optional = true }
-sled = { version = "0.34.7", optional = true }
+fjall = { version = "3", optional = true }
 tikv-client = { version = "0.3.0", optional = true }
 tokio = { version = "1.37.0", optional = true }
 sqlite = { version = "0.36.0", optional = true }
