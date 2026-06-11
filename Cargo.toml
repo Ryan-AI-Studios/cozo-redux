@@ -24,3 +24,4 @@ opt-level = 3
 fast2s = { path = "vendor/fast2s" }
 graph = { path = "vendor/graph" }
 graph_builder = { path = "vendor/graph_builder" }
+tikv-client = { path = "vendor/tikv-client" }
