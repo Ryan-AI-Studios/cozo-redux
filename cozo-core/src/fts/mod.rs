@@ -16,6 +16,29 @@ use crate::fts::tokenizer::{
 use crate::DataValue;
 use jieba_rs::Jieba;
 use miette::{bail, ensure, miette, Result};
+
+static DEFAULT_JIEBA: std::sync::LazyLock<Result<std::sync::Arc<Jieba>, String>> =
+    std::sync::LazyLock::new(|| {
+        let compressed_bytes = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/assets/jieba_dict.txt.deflate"
+        ));
+        let mut jieba = Jieba::empty();
+        match miniz_oxide::inflate::decompress_to_vec(compressed_bytes) {
+            Ok(decompressed_bytes) => {
+                let mut cursor = std::io::Cursor::new(decompressed_bytes);
+                if let Err(e) = jieba.load_dict(&mut cursor) {
+                    Err(format!("Failed to load embedded jieba dictionary: {:?}", e))
+                } else {
+                    Ok(std::sync::Arc::new(jieba))
+                }
+            }
+            Err(e) => Err(format!(
+                "Failed to decompress embedded jieba dictionary: {:?}",
+                e
+            )),
+        }
+    });
 use sha2::digest::FixedOutput;
 use sha2::{Digest, Sha256};
 use smartstring::{LazyCompact, SmartString};
@@ -128,10 +151,11 @@ impl TokenizerConfig {
                         }
                     }
                 };
-                Box::new(CangJieTokenizer {
-                    worker: std::sync::Arc::new(Jieba::new()),
-                    option,
-                })
+                let worker = match &*DEFAULT_JIEBA {
+                    Ok(jieba) => std::sync::Arc::clone(jieba),
+                    Err(e) => bail!("Cangjie tokenizer initialization failed: {e}"),
+                };
+                Box::new(CangJieTokenizer { worker, option })
             }
             _ => bail!("Unknown tokenizer: {}", self.name),
         })
@@ -281,5 +305,20 @@ impl TokenizerCache {
             idx_cache.insert(tokenizer_name.into(), analyzer.clone());
             Ok(analyzer)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_chinese_segmentation_smoke() {
+        let text = "我们中出了一个叛徒";
+        let words = DEFAULT_JIEBA
+            .as_ref()
+            .expect("Failed to load DEFAULT_JIEBA")
+            .cut(text, false);
+        assert_eq!(words, vec!["我们", "中", "出", "了", "一个", "叛徒"]);
     }
 }

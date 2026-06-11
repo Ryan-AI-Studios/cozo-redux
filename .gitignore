@@ -56,3 +56,6 @@ CLAUDE.md
 
 # Conductor tracks (local planning)
 conductor/
+
+# Jieba Dict Decoupling
+cozo-core/assets/jieba_dict.txt
