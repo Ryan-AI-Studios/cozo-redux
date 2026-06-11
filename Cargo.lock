@@ -1627,8 +1627,6 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 [[package]]
 name = "graph"
 version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e5a6f21cf3fabb758f26cea0f3b5854189d435d4337d85226020e3869fcc8b3"
 dependencies = [
  "ahash",
  "atomic_float",
@@ -1642,8 +1640,6 @@ dependencies = [
 [[package]]
 name = "graph_builder"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24f006b0c4bba033c1a7fc7644612c6ec53894c353956d94820a28fc6e8a571f"
 dependencies = [
  "atoi",
  "atomic 0.5.3",
@@ -1651,7 +1647,6 @@ dependencies = [
  "dashmap",
  "delegate",
  "fast-float2",
- "fxhash",
  "linereader",
  "log",
  "memmap2",
@@ -1661,6 +1656,7 @@ dependencies = [
  "page_size",
  "parking_lot 0.12.5",
  "rayon",
+ "rustc-hash 2.1.2",
  "thiserror",
 ]
 

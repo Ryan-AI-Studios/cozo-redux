@@ -22,3 +22,5 @@ opt-level = 3
 
 [patch.crates-io]
 fast2s = { path = "vendor/fast2s" }
+graph = { path = "vendor/graph" }
+graph_builder = { path = "vendor/graph_builder" }

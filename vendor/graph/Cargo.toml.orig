@@ -1,0 +1,29 @@
+[package]
+name = "graph"
+version = "0.3.1"
+description = "A library of high-performant graph algorithms."
+keywords = ["graph", "algorithms", "parallel"]
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ahash.workspace = true
+atomic_float.workspace = true
+clap = { workspace = true, optional = true }
+graph_builder = { path = "../builder", version = "^0.4.0" }
+log.workspace = true
+num-format.workspace = true
+nanorand.workspace = true
+rayon.workspace = true
+serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+env_logger.workspace = true
+graph_builder = { path = "../builder", version = "^0.4.0", features = ["gdl"] }
+log.workspace = true
+polars.workspace = true
