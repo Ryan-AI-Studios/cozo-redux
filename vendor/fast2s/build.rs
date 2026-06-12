@@ -8,7 +8,7 @@ fn main() {
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let out_file = Path::new(&out_dir).join("map.bin");
     let v = get_kv("src/t2s.txt");
-    let encoded = bincode::serde::encode_to_vec(&v, bincode::config::standard()).unwrap();
+    let encoded = postcard::to_allocvec(&v).unwrap();
     std::fs::write(out_file, encoded).unwrap();
 }
 

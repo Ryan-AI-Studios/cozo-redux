@@ -100,8 +100,7 @@ impl<T: Serialize + for<'a> Deserialize<'a> + Clone> SwapVecIter<T> {
             .decompress(buffer.to_vec())
             .map_err(|_| SwapVecError::Decompression)?;
 
-        let batch: Vec<T> =
-            bincode::serde::decode_from_slice(&decompressed, bincode::config::standard())?.0;
+        let batch: Vec<T> = postcard::from_bytes(&decompressed)?;
 
         Ok(Some(batch))
     }

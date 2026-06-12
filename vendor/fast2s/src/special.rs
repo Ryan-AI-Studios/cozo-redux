@@ -8,7 +8,7 @@ static MAP_DATA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/map.bin"));
 
 /// state machine for the translation
 static MAP: LazyLock<HashMap<char, char>> = LazyLock::new(|| {
-    let data: Vec<(char, char)> = bincode::serde::decode_from_slice(MAP_DATA, bincode::config::standard()).unwrap().0;
+    let data: Vec<(char, char)> = postcard::from_bytes(MAP_DATA).unwrap();
     data.into_iter().collect()
 });
 

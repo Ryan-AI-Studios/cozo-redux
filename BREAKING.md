@@ -15,15 +15,17 @@ The unmaintained `sled` storage engine has been replaced with `fjall`, a modern 
     2.  Upgrade to v0.8.1-redux.
     3.  Import the backup into a new `fjall`-backed instance.
 
-## 2. Python Bindings: pyo3 0.24 Upgrade (Track 015)
+## 2. Python Bindings: pyo3 0.29 Upgrade (Track 015)
 
 **Impact:** API / Compilation
 **Crate:** `cozo-lib-python`
 
-The Python bridge has been upgraded to `pyo3` 0.24.x to resolve security advisories (RUSTSEC-2026-0176).
+The Python bridge has been upgraded to `pyo3` 0.29.x to resolve security advisories (RUSTSEC-2026-0176, RUSTSEC-2026-0177).
 
-*   **Breaking Change:** If you consume `cozo-lib-python` as a Rust dependency or rely on specific internal `PyO3` behaviors, you may encounter breaking changes in the Rust-Python interface.
-*   **Remediation:** Ensure your environment is compatible with the latest `pyo3` standards.
+*   **Breaking Change:** 
+    *   Significant API changes between `pyo3` 0.20 and 0.29.
+    *   Dropped support for `abi3-py37`. Minimum supported Python version for `abi3` is now 3.8.
+*   **Remediation:** Ensure your environment is compatible with the latest `pyo3` standards and use Python 3.8+.
 
 ## 3. Distributed Storage: tikv-client 0.4.0 & tonic 0.11 (Track 020)
 

@@ -36,14 +36,8 @@ impl From<std::io::Error> for SwapVecError {
     }
 }
 
-impl From<bincode::error::DecodeError> for SwapVecError {
-    fn from(value: bincode::error::DecodeError) -> Self {
-        SwapVecError::SerializationFailed(value.to_string())
-    }
-}
-
-impl From<bincode::error::EncodeError> for SwapVecError {
-    fn from(value: bincode::error::EncodeError) -> Self {
+impl From<postcard::Error> for SwapVecError {
+    fn from(value: postcard::Error) -> Self {
         SwapVecError::SerializationFailed(value.to_string())
     }
 }

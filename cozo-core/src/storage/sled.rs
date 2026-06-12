@@ -482,4 +482,26 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn fjall_durability_across_reopen() -> Result<()> {
+        let dir = tempdir().into_diagnostic()?;
+        let path = dir.path();
+
+        {
+            let db = new_cozo_sled(path)?;
+            let mut tx = db.db.transact(true)?;
+            tx.put(b"persist_me", b"iamhere")?;
+            tx.commit()?;
+            // DB is dropped here
+        }
+
+        {
+            let db = new_cozo_sled(path)?;
+            let tx = db.db.transact(false)?;
+            assert_eq!(tx.get(b"persist_me", false)?.unwrap(), b"iamhere");
+        }
+
+        Ok(())
+    }
 }
