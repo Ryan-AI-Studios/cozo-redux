@@ -9,7 +9,7 @@ Master registry for development tracks and architectural upgrades.
 | **017** | Planning | Serialization Dep Modernization — postcard → bincode in swapvec + fast2s |  |
 | **018** | Planning | graph/graph_builder fxhash Elimination — vendor + rustc-hash swap |  |
 | **019** | Planning | sled → fjall Storage Migration — replace unmaintained sled backend |  |
-| **020** | Planning | tikv-client Remediation — 0.3→0.4 + vendor + tonic 0.10→0.11 |  |
+| **020** | Completed | tikv-client Remediation — 0.3→0.4 + vendor + tonic 0.10→0.11 |  |
 
 ## Completed Tracks
 
