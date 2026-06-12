@@ -1,5 +1,27 @@
 # CozoDB-redux Release Notes
 
+## v0.8.1-redux
+
+This release focuses on critical security remediations, storage backend modernization, and dependency decoupling across 6 major development tracks.
+
+### Security Remediations
+
+* **pyo3 Security Update** (Track 015) — Resolved OOB read vulnerabilities in `PyList` and `PyTuple` iterators by upgrading to safe versions.
+* **tikv-client Hardening** (Track 020) — Upgraded and vendored `tikv-client` 0.4.0 with a patched `tonic` 0.11 stack. Resolved 6 security advisories in the `storage-tikv` path including `protobuf` recursion crashes, `rand` unsoundness, and multiple `rustls-webpki` CVEs.
+* **Unsafe Allocator Removal** (Track 015) — Removed `wee_alloc` and other unmaintained allocator crates to improve system stability and security.
+* **Modernized Crypto & TLS** — Swapped `atty` for `is-terminal` and upgraded `cbindgen` to resolve secondary audit findings.
+
+### Storage & Dependency Modernization
+
+* **sled → fjall Migration** (Track 019) — Replaced the unmaintained `sled` storage engine with `fjall`, a modern LSM-based engine, improving stability and performance for persistent key-value storage.
+* **Serialization Overhaul in swapvec & fast2s** (Track 017) — Migrated from `bincode` (unmaintained) to `postcard` for internal data-value serialization in auxiliary storage crates.
+* **jieba-rs Decoupling** (Track 016) — Removed `include-flate` and `proc-macro-error2` build dependencies by externalizing the `jieba` dictionary loading, significantly speeding up build times and reducing binary footprint.
+* **fxhash Elimination** (Track 018) — Removed unmaintained `fxhash` and `graph` vendor dependencies in favor of `rustc-hash` for deterministic, high-performance hashing in graph algorithms.
+
+### Infrastructure
+
+* **ChangeGuard Integration** — Hardened the CI gate with ChangeGuard-verified behavior and provenance tracking for all security-sensitive edits.
+
 ## v0.8.0-redux
 
 This is the consolidated release of the CozoDB-redux fork, incorporating 14 major development tracks for performance, security, and HNSW stability.
