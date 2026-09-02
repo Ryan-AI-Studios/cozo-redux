@@ -568,7 +568,7 @@ impl<'a> SessionTx<'a> {
                 }
                 poison.check()?;
             } else {
-                for (delta_key, _) in stores.iter() {
+                for delta_key in stores.keys() {
                     if !rule.contained_rules.contains_key(delta_key) {
                         continue;
                     }
@@ -650,7 +650,7 @@ impl<'a> SessionTx<'a> {
                 }
                 poison.check()?;
             } else {
-                for (delta_key, _) in stores.iter() {
+                for delta_key in stores.keys() {
                     if !rule.contained_rules.contains_key(delta_key) {
                         continue;
                     }
