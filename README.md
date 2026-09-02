@@ -5,9 +5,9 @@
 
 <img src="static/logo_c.png" width="200" height="175" alt="Logo">
 
-[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/UnlikelyKiller/cozo-redux/build.yml?branch=main)](https://github.com/UnlikelyKiller/cozo-redux/actions/workflows/build.yml)
-[![GitHub](https://img.shields.io/github/license/UnlikelyKiller/cozo-redux)](https://github.com/UnlikelyKiller/cozo-redux/blob/main/LICENSE.txt)
-[![GitHub last commit](https://img.shields.io/github/last-commit/UnlikelyKiller/cozo-redux)](https://github.com/UnlikelyKiller/cozo-redux/commits/main)
+[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/Ryan-AI-Studios/cozo-redux/build.yml?branch=main)](https://github.com/Ryan-AI-Studios/cozo-redux/actions/workflows/build.yml)
+[![GitHub](https://img.shields.io/github/license/Ryan-AI-Studios/cozo-redux)](https://github.com/Ryan-AI-Studios/cozo-redux/blob/main/LICENSE.txt)
+[![GitHub last commit](https://img.shields.io/github/last-commit/Ryan-AI-Studios/cozo-redux)](https://github.com/Ryan-AI-Studios/cozo-redux/commits/main)
 
 # `CozoDB-redux`
 
@@ -406,9 +406,9 @@ Issues, discussions, and pull requests are welcome at this repository.
 * [Original project page](https://cozodb.org/)
 * [Original documentation](https://docs.cozodb.org/en/latest/)
 * [Upstream repo](https://github.com/cozodb/cozo)
-* [This fork](https://github.com/UnlikelyKiller/cozo-redux)
-* [Issue tracker (this fork)](https://github.com/UnlikelyKiller/cozo-redux/issues)
-* [Project discussions (this fork)](https://github.com/UnlikelyKiller/cozo-redux/discussions)
+* [This fork](https://github.com/Ryan-AI-Studios/cozo-redux)
+* [Issue tracker (this fork)](https://github.com/Ryan-AI-Studios/cozo-redux/issues)
+* [Project discussions (this fork)](https://github.com/Ryan-AI-Studios/cozo-redux/discussions)
 * [User reddit](https://www.reddit.com/r/cozodb/)
 
 ## Licensing and contributing

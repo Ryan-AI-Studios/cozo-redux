@@ -6,8 +6,8 @@ This is a maintained fork of the original [CozoDB](https://github.com/cozodb/coz
 
 ### How to contribute
 
-* **Bug reports**: [Open an issue](https://github.com/UnlikelyKiller/cozo-redux/issues).
-* **Feature requests**: [Open a discussion](https://github.com/UnlikelyKiller/cozo-redux/discussions) first — we want to keep the scope focused.
+* **Bug reports**: [Open an issue](https://github.com/Ryan-AI-Studios/cozo-redux/issues).
+* **Feature requests**: [Open a discussion](https://github.com/Ryan-AI-Studios/cozo-redux/discussions) first — we want to keep the scope focused.
 * **Pull requests**: Fork the repo, create a branch, and open a PR against `main`.
 
 ### Requirements for PRs

@@ -2,7 +2,7 @@
 
 Hi CozoDB maintainers and community,
 
-I wanted to let you know that I've started maintaining a fork at **https://github.com/UnlikelyKiller/cozo-redux**.
+I wanted to let you know that I've started maintaining a fork at **https://github.com/Ryan-AI-Studios/cozo-redux**.
 
 ### Why the fork?
 

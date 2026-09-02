@@ -5,7 +5,7 @@
 **Ledgerful** (retired name: ChangeGuard) consumes this repository as a git dependency:
 
 ```toml
-cozo = { git = "https://github.com/UnlikelyKiller/cozo-redux", default-features = false, features = ["storage-fjall", "graph-algo", "rayon"] }
+cozo = { git = "https://github.com/Ryan-AI-Studios/cozo-redux", default-features = false, features = ["storage-fjall", "graph-algo", "rayon"] }
 ```
 
 GitHub Dependabot reported a high-severity alert in Ledgerful (then named ChangeGuard) for
