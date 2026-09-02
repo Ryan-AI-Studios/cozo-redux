@@ -12,13 +12,13 @@ use crate::data::tuple::Tuple;
 use crate::data::value::ValidityTs;
 use crate::decode_tuple_from_kv;
 
+#[cfg(feature = "storage-fjall")]
+pub(crate) mod fjall;
 pub(crate) mod mem;
 #[cfg(feature = "storage-new-rocksdb")]
 pub mod newrocks;
 #[cfg(feature = "storage-rocksdb")]
 pub(crate) mod rocks;
-#[cfg(feature = "storage-sled")]
-pub(crate) mod sled;
 #[cfg(feature = "storage-sqlite")]
 pub(crate) mod sqlite;
 pub(crate) mod temp;

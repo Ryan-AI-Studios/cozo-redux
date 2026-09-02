@@ -1,4 +1,13 @@
 repos:
+  - repo: local
+    hooks:
+      - id: ledgerful-ledger
+        name: ledgerful ledger status
+        entry: ledgerful ledger status --compact --exit-code --verify-signatures
+        language: system
+        pass_filenames: false
+        always_run: true
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:

@@ -5,9 +5,9 @@ This document tracks breaking changes and migration requirements for users of th
 ## 1. Storage Migration: sled -> fjall (Track 019)
 
 **Impact:** Data Incompatibility
-**Feature:** `storage-sled`
+**Feature:** `storage-fjall`
 
-The unmaintained `sled` storage engine has been replaced with `fjall`, a modern LSM-based engine. 
+The unmaintained `sled` storage engine has been replaced with `fjall`, a modern LSM-based engine.
 
 *   **Breaking Change:** The on-disk formats are fundamentally different and incompatible. Existing `sled` database files **cannot** be opened by v0.8.1-redux.
 *   **Migration Path:**
@@ -22,22 +22,22 @@ The unmaintained `sled` storage engine has been replaced with `fjall`, a modern 
 
 The Python bridge has been upgraded to `pyo3` 0.29.x to resolve security advisories (RUSTSEC-2026-0176, RUSTSEC-2026-0177).
 
-*   **Breaking Change:** 
+*   **Breaking Change:**
     *   Significant API changes between `pyo3` 0.20 and 0.29.
     *   Dropped support for `abi3-py37`. Minimum supported Python version for `abi3` is now 3.8.
 *   **Remediation:** Ensure your environment is compatible with the latest `pyo3` standards and use Python 3.8+.
 
-## 3. Distributed Storage: tikv-client 0.4.0 & tonic 0.11 (Track 020)
+## 3. Distributed Storage: tikv-client 0.4.0 & tonic 0.12 (Track 020)
 
 **Impact:** API / Configuration
 **Feature:** `storage-tikv`
 
-To resolve multiple security vulnerabilities in the gRPC and TLS stacks, `tikv-client` has been upgraded and vendored with a `tonic` 0.11 patch.
+To resolve multiple security vulnerabilities in the gRPC and TLS stacks, `tikv-client` has been upgraded and vendored with a `tonic` 0.12 patch.
 
-*   **Breaking Change:** 
-    *   `tonic` 0.11 moved several core types (e.g., `NamedService`) and updated its internal TLS implementation to `rustls` 0.22.
+*   **Breaking Change:**
+    *   `tonic` 0.12 moved several core types (e.g., `NamedService`) and updated its internal TLS implementation to `rustls` 0.24.2.
     *   Manual transport configurations or security managers utilizing the `tikv-client` API directly will require updates.
-*   **Remediation:** Update any code interacting directly with `tikv-client` or `tonic` transport layers to match the 0.4.0 and 0.11 APIs respectively.
+*   **Remediation:** Update any code interacting directly with `tikv-client` or `tonic` transport layers to match the 0.4.0 and 0.12 APIs respectively.
 
 ## 4. Internal Data Serialization (Track 017)
 

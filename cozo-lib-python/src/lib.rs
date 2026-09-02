@@ -13,6 +13,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use miette::{IntoDiagnostic, Report, Result};
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
+use pyo3::IntoPyObjectExt;
+type PyObject = Py<PyAny>;
 use pyo3::types::{PyBool, PyByteArray, PyBytes, PyDict, PyList, PyModule, PyString, PyTuple};
 use serde_json::json;
 
@@ -36,7 +38,7 @@ fn report2py(r: Report) -> PyErr {
 }
 
 fn py_to_named_rows(ob: &Bound<'_, PyAny>) -> PyResult<NamedRows> {
-    let d = ob.downcast::<PyDict>()?;
+    let d = ob.cast::<PyDict>()?;
     let rows = d
         .get_item("rows")?
         .ok_or_else(|| PyException::new_err("named rows must contain 'rows'"))?;
@@ -51,7 +53,7 @@ fn py_to_named_rows(ob: &Bound<'_, PyAny>) -> PyResult<NamedRows> {
 fn py_to_value(ob: &Bound<'_, PyAny>) -> PyResult<DataValue> {
     Ok(if ob.is_none() {
         DataValue::Null
-    } else if let Ok(b) = ob.downcast::<PyBool>() {
+    } else if let Ok(b) = ob.cast::<PyBool>() {
         DataValue::from(b.is_true())
     } else if let Ok(i) = ob.extract::<i64>() {
         DataValue::from(i)
@@ -59,25 +61,25 @@ fn py_to_value(ob: &Bound<'_, PyAny>) -> PyResult<DataValue> {
         DataValue::from(f)
     } else if let Ok(s) = ob.extract::<String>() {
         DataValue::from(s)
-    } else if let Ok(b) = ob.downcast::<PyBytes>() {
+    } else if let Ok(b) = ob.cast::<PyBytes>() {
         DataValue::Bytes(b.as_bytes().to_vec())
-    } else if let Ok(b) = ob.downcast::<PyByteArray>() {
+    } else if let Ok(b) = ob.cast::<PyByteArray>() {
         DataValue::Bytes(unsafe { b.as_bytes() }.to_vec())
-    } else if let Ok(l) = ob.downcast::<PyTuple>() {
+    } else if let Ok(l) = ob.cast::<PyTuple>() {
         let mut coll = Vec::with_capacity(l.len());
         for el in l {
             let el = py_to_value(&el)?;
             coll.push(el)
         }
         DataValue::List(Box::new(coll))
-    } else if let Ok(l) = ob.downcast::<PyList>() {
+    } else if let Ok(l) = ob.cast::<PyList>() {
         let mut coll = Vec::with_capacity(l.len());
         for el in l {
             let el = py_to_value(&el)?;
             coll.push(el)
         }
         DataValue::List(Box::new(coll))
-    } else if let Ok(d) = ob.downcast::<PyDict>() {
+    } else if let Ok(d) = ob.cast::<PyDict>() {
         let mut coll = serde_json::Map::default();
         for (k, v) in d {
             let k = serde_json::Value::from(py_to_value(&k)?);
@@ -110,104 +112,125 @@ fn options_to_py<'py>(
     opts: BTreeMap<String, DataValue>,
     py: Python<'py>,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let ret = PyDict::new_bound(py);
+    let ret = PyDict::new(py);
 
     for (k, v) in opts {
-        let val = value_to_py(v, py);
+        let val = value_to_py(v, py)?;
         ret.set_item(k, val)?;
     }
     Ok(ret)
 }
 
-fn json_to_py(val: serde_json::Value, py: Python<'_>) -> PyObject {
+fn json_to_py(val: serde_json::Value, py: Python<'_>) -> PyResult<PyObject> {
     match val {
-        serde_json::Value::Null => py.None(),
-        serde_json::Value::Bool(b) => b.into_py(py),
+        serde_json::Value::Null => Ok(py.None()),
+        serde_json::Value::Bool(b) => b.into_py_any(py),
         serde_json::Value::Number(n) => {
             if let Some(i) = n.as_i64() {
-                i.into_py(py)
+                i.into_py_any(py)
             } else if let Some(f) = n.as_f64() {
-                f.into_py(py)
+                f.into_py_any(py)
             } else {
-                py.None()
+                Ok(py.None())
             }
         }
-        serde_json::Value::String(s) => s.into_py(py),
+        serde_json::Value::String(s) => s.into_py_any(py),
         serde_json::Value::Array(a) => {
-            let vs: Vec<_> = a.into_iter().map(|v| json_to_py(v, py)).collect();
-            vs.into_py(py)
+            let vs = a
+                .into_iter()
+                .map(|v| json_to_py(v, py))
+                .collect::<PyResult<Vec<_>>>()?;
+            vs.into_py_any(py)
         }
         serde_json::Value::Object(o) => {
-            let d = PyDict::new_bound(py);
+            let d = PyDict::new(py);
             for (k, v) in o {
-                d.set_item(k, json_to_py(v, py)).unwrap();
+                d.set_item(k, json_to_py(v, py)?)?;
             }
-            d.into()
+            Ok(d.into())
         }
     }
 }
 
-fn value_to_py(val: DataValue, py: Python<'_>) -> PyObject {
+fn value_to_py(val: DataValue, py: Python<'_>) -> PyResult<PyObject> {
     match val {
-        DataValue::Null => py.None(),
-        DataValue::Bool(b) => b.into_py(py),
+        DataValue::Null => Ok(py.None()),
+        DataValue::Bool(b) => b.into_py_any(py),
         DataValue::Num(num) => match num {
-            Num::Int(i) => i.into_py(py),
-            Num::Float(f) => f.into_py(py),
+            Num::Int(i) => i.into_py_any(py),
+            Num::Float(f) => f.into_py_any(py),
         },
-        DataValue::Str(s) => s.as_str().into_py(py),
-        DataValue::Bytes(b) => PyBytes::new_bound(py, &b).into(),
-        DataValue::Uuid(uuid) => uuid.0.to_string().into_py(py),
-        DataValue::Regex(rx) => rx.0.as_str().into_py(py),
+        DataValue::Str(s) => s.as_str().into_py_any(py),
+        DataValue::Bytes(b) => Ok(PyBytes::new(py, &b).into()),
+        DataValue::Uuid(uuid) => uuid.0.to_string().into_py_any(py),
+        DataValue::Regex(rx) => rx.0.as_str().into_py_any(py),
         DataValue::List(l) => {
-            let vs: Vec<_> = l.into_iter().map(|v| value_to_py(v, py)).collect();
-            vs.into_py(py)
+            let vs = l
+                .into_iter()
+                .map(|v| value_to_py(v, py))
+                .collect::<PyResult<Vec<_>>>()?;
+            vs.into_py_any(py)
         }
         DataValue::Set(l) => {
-            let vs: Vec<_> = l.into_iter().map(|v| value_to_py(v, py)).collect();
-            vs.into_py(py)
+            let vs = l
+                .into_iter()
+                .map(|v| value_to_py(v, py))
+                .collect::<PyResult<Vec<_>>>()?;
+            vs.into_py_any(py)
         }
         DataValue::Validity(vld) => {
-            [vld.timestamp.0 .0.into_py(py), vld.is_assert.0.into_py(py)].into_py(py)
+            let parts = [
+                vld.timestamp.0 .0.into_py_any(py)?,
+                vld.is_assert.0.into_py_any(py)?,
+            ];
+            parts.into_py_any(py)
         }
-        DataValue::Bot => py.None(),
+        DataValue::Bot => Ok(py.None()),
         DataValue::Vec(v) => match *v {
             Vector::F32(a) => {
-                let vs: Vec<_> = a.into_iter().map(|v| v.into_py(py)).collect();
-                vs.into_py(py)
+                let vs = a
+                    .into_iter()
+                    .map(|v| v.into_py_any(py))
+                    .collect::<PyResult<Vec<_>>>()?;
+                vs.into_py_any(py)
             }
             Vector::F64(a) => {
-                let vs: Vec<_> = a.into_iter().map(|v| v.into_py(py)).collect();
-                vs.into_py(py)
+                let vs = a
+                    .into_iter()
+                    .map(|v| v.into_py_any(py))
+                    .collect::<PyResult<Vec<_>>>()?;
+                vs.into_py_any(py)
             }
         },
         DataValue::Json(j) => json_to_py(j.0, py),
     }
 }
 
-fn rows_to_py_rows<R>(rows: Vec<R>, py: Python<'_>) -> PyObject
+fn rows_to_py_rows<R>(rows: Vec<R>, py: Python<'_>) -> PyResult<PyObject>
 where
     R: IntoIterator<Item = DataValue>,
 {
-    rows.into_iter()
+    let outer = rows
+        .into_iter()
         .map(|row| {
-            row.into_iter()
+            let inner = row
+                .into_iter()
                 .map(|val| value_to_py(val, py))
-                .collect::<Vec<_>>()
-                .into_py(py)
+                .collect::<PyResult<Vec<_>>>()?;
+            inner.into_py_any(py)
         })
-        .collect::<Vec<_>>()
-        .into_py(py)
+        .collect::<PyResult<Vec<_>>>()?;
+    outer.into_py_any(py)
 }
 
-fn named_rows_to_py(named_rows: NamedRows, py: Python<'_>) -> PyObject {
-    let rows = rows_to_py_rows(named_rows.rows, py);
-    let headers = named_rows.headers.into_py(py);
+fn named_rows_to_py(named_rows: NamedRows, py: Python<'_>) -> PyResult<PyObject> {
+    let rows = rows_to_py_rows(named_rows.rows, py)?;
+    let headers = named_rows.headers.into_py_any(py)?;
     let next = match named_rows.next {
         None => py.None(),
-        Some(nxt) => named_rows_to_py(*nxt, py),
+        Some(nxt) => named_rows_to_py(*nxt, py)?,
     };
-    BTreeMap::from([("rows", rows), ("headers", headers), ("next", next)]).into_py(py)
+    BTreeMap::from([("rows", rows), ("headers", headers), ("next", next)]).into_py_any(py)
 }
 
 #[pyclass]
@@ -240,7 +263,7 @@ impl CozoDbPy {
     ) -> PyResult<PyObject> {
         if let Some(db) = &self.db {
             let params = convert_params(params)?;
-            match py.allow_threads(|| {
+            match py.detach(|| {
                 db.run_script(
                     query,
                     params,
@@ -251,14 +274,14 @@ impl CozoDbPy {
                     },
                 )
             }) {
-                Ok(rows) => Ok(named_rows_to_py(rows, py)),
+                Ok(rows) => Ok(named_rows_to_py(rows, py)?),
                 Err(err) => {
                     let reports = format_error_as_json(err, Some(query)).to_string();
-                    let json_mod = py.import_bound("json")?;
+                    let json_mod = py.import("json")?;
                     let loads_fn = json_mod.getattr("loads")?;
-                    let args = PyTuple::new_bound(py, [PyString::new_bound(py, &reports)]);
+                    let args = PyTuple::new(py, [PyString::new(py, &reports)])?;
                     let msg = loads_fn.call1(args)?;
-                    Err(PyException::new_err(msg.into_py(py)))
+                    Err(PyException::new_err(msg.into_py_any(py)?))
                 }
             }
         } else {
@@ -271,17 +294,36 @@ impl CozoDbPy {
             let (id, ch) = db.register_callback(rel, None);
             rayon::spawn(move || {
                 for (op, new, old) in ch {
-                    Python::with_gil(|py| {
-                        let op = PyString::new_bound(py, op.as_str());
-                        let new_py = rows_to_py_rows(new.rows, py);
-                        let old_py = rows_to_py_rows(old.rows, py);
-                        let args = PyTuple::new_bound(
+                    Python::attach(|py| {
+                        let op = PyString::new(py, op.as_str());
+                        let new_py = match rows_to_py_rows(new.rows, py) {
+                            Ok(n) => n,
+                            Err(err) => {
+                                eprintln!("{}", err);
+                                return;
+                            }
+                        };
+                        let old_py = match rows_to_py_rows(old.rows, py) {
+                            Ok(o) => o,
+                            Err(err) => {
+                                eprintln!("{}", err);
+                                return;
+                            }
+                        };
+                        let args = PyTuple::new(
                             py,
                             [op.into_any(), new_py.into_bound(py), old_py.into_bound(py)],
                         );
                         let callable = cb.bind(py);
-                        if let Err(err) = callable.call1(args) {
-                            eprintln!("{}", err);
+                        match args {
+                            Ok(args) => {
+                                if let Err(err) = callable.call1(args) {
+                                    eprintln!("{}", err);
+                                }
+                            }
+                            Err(err) => {
+                                eprintln!("{}", err);
+                            }
                         }
                     })
                 }
@@ -300,14 +342,16 @@ impl CozoDbPy {
         if let Some(db) = &self.db {
             let cb: Py<PyAny> = callback.clone().unbind();
             let rule_impl = SimpleFixedRule::new(arity, move |inputs, options| -> Result<_> {
-                Python::with_gil(|py| -> Result<NamedRows> {
-                    let py_inputs = PyList::new_bound(
-                        py,
-                        inputs.into_iter().map(|nr| rows_to_py_rows(nr.rows, py)),
-                    );
+                Python::attach(|py| -> Result<NamedRows> {
+                    let py_inputs_vec = inputs
+                        .into_iter()
+                        .map(|nr| rows_to_py_rows(nr.rows, py))
+                        .collect::<PyResult<Vec<_>>>()
+                        .into_diagnostic()?;
+                    let py_inputs = PyList::new(py, py_inputs_vec).into_diagnostic()?;
                     let py_opts = options_to_py(options, py).into_diagnostic()?;
-                    let args =
-                        PyTuple::new_bound(py, vec![py_inputs.into_any(), py_opts.into_any()]);
+                    let args = PyTuple::new(py, vec![py_inputs.into_any(), py_opts.into_any()])
+                        .into_diagnostic()?;
                     let res = cb.bind(py).call1(args).into_diagnostic()?;
                     Ok(NamedRows::new(vec![], py_to_rows(&res).into_diagnostic()?))
                 })
@@ -336,13 +380,13 @@ impl CozoDbPy {
     }
     pub fn export_relations(&self, py: Python<'_>, relations: Vec<String>) -> PyResult<PyObject> {
         if let Some(db) = &self.db {
-            let res = match py.allow_threads(|| db.export_relations(relations.iter())) {
+            let res = match py.detach(|| db.export_relations(relations.iter())) {
                 Ok(res) => res,
                 Err(err) => return Err(PyException::new_err(err.to_string())),
             };
-            let ret = PyDict::new_bound(py);
+            let ret = PyDict::new(py);
             for (k, v) in res {
-                ret.set_item(k, named_rows_to_py(v, py))?;
+                ret.set_item(k, named_rows_to_py(v, py)?)?;
             }
             Ok(ret.into())
         } else {
@@ -357,23 +401,21 @@ impl CozoDbPy {
                 let vals = py_to_named_rows(&v)?;
                 arg.insert(k, vals);
             }
-            py.allow_threads(|| db.import_relations(arg))
-                .map_err(report2py)
+            py.detach(|| db.import_relations(arg)).map_err(report2py)
         } else {
             Err(PyException::new_err(DB_CLOSED_MSG.to_string()))
         }
     }
     pub fn backup(&self, py: Python<'_>, path: &str) -> PyResult<()> {
         if let Some(db) = &self.db {
-            py.allow_threads(|| db.backup_db(path)).map_err(report2py)
+            py.detach(|| db.backup_db(path)).map_err(report2py)
         } else {
             Err(PyException::new_err(DB_CLOSED_MSG.to_string()))
         }
     }
     pub fn restore(&self, py: Python<'_>, path: &str) -> PyResult<()> {
         if let Some(db) = &self.db {
-            py.allow_threads(|| db.restore_backup(path))
-                .map_err(report2py)
+            py.detach(|| db.restore_backup(path)).map_err(report2py)
         } else {
             Err(PyException::new_err(DB_CLOSED_MSG.to_string()))
         }
@@ -385,7 +427,7 @@ impl CozoDbPy {
         relations: Vec<String>,
     ) -> PyResult<()> {
         if let Some(db) = &self.db {
-            py.allow_threads(|| db.import_from_backup(in_file, &relations))
+            py.detach(|| db.import_from_backup(in_file, &relations))
                 .map_err(report2py)
         } else {
             Err(PyException::new_err(DB_CLOSED_MSG.to_string()))
@@ -424,15 +466,15 @@ impl CozoDbMulTx {
         params: &Bound<'_, PyDict>,
     ) -> PyResult<PyObject> {
         let params = convert_params(params)?;
-        match py.allow_threads(|| self.tx.run_script(query, params)) {
-            Ok(rows) => Ok(named_rows_to_py(rows, py)),
+        match py.detach(|| self.tx.run_script(query, params)) {
+            Ok(rows) => Ok(named_rows_to_py(rows, py)?),
             Err(err) => {
                 let reports = format_error_as_json(err, Some(query)).to_string();
-                let json_mod = py.import_bound("json")?;
+                let json_mod = py.import("json")?;
                 let loads_fn = json_mod.getattr("loads")?;
-                let args = PyTuple::new_bound(py, [PyString::new_bound(py, &reports)]);
+                let args = PyTuple::new(py, [PyString::new(py, &reports)])?;
                 let msg = loads_fn.call1(args)?;
-                Err(PyException::new_err(msg.into_py(py)))
+                Err(PyException::new_err(msg.into_py_any(py)?))
             }
         }
     }
@@ -448,14 +490,14 @@ fn eval_expressions(
     let params = convert_params(params)?;
     let bindings = convert_params(bindings)?;
     match evaluate_expressions(query, &params, &bindings) {
-        Ok(v) => Ok(value_to_py(v, py)),
+        Ok(v) => Ok(value_to_py(v, py)?),
         Err(err) => {
             let reports = format_error_as_json(err, Some(query)).to_string();
-            let json_mod = py.import_bound("json")?;
+            let json_mod = py.import("json")?;
             let loads_fn = json_mod.getattr("loads")?;
-            let args = PyTuple::new_bound(py, [PyString::new_bound(py, &reports)]);
+            let args = PyTuple::new(py, [PyString::new(py, &reports)])?;
             let msg = loads_fn.call1(args)?;
-            Err(PyException::new_err(msg.into_py(py)))
+            Err(PyException::new_err(msg.into_py_any(py)?))
         }
     }
 }
@@ -471,11 +513,11 @@ fn variables(
         Ok(rows) => Ok(rows),
         Err(err) => {
             let reports = format_error_as_json(err, Some(query)).to_string();
-            let json_mod = _py.import_bound("json")?;
+            let json_mod = _py.import("json")?;
             let loads_fn = json_mod.getattr("loads")?;
-            let args = PyTuple::new_bound(_py, [PyString::new_bound(_py, &reports)]);
+            let args = PyTuple::new(_py, [PyString::new(_py, &reports)])?;
             let msg = loads_fn.call1(args)?;
-            Err(PyException::new_err(msg.into_py(_py)))
+            Err(PyException::new_err(msg.into_py_any(_py)?))
         }
     }
 }

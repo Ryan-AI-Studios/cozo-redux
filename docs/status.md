@@ -1,10 +1,12 @@
 # Status Report
 
+> **Stale (2026-05-11).** Live track list: `conductor/conductor.md`. Do not plan from this file. Tracks 001–020 are complete. Spikes 021–029 are Placeholder (`/plan-track`, not `/implement-track`). Provenance CLI is **Ledgerful** (`ledgerful`), not ChangeGuard.
+
 Date: 2026-05-11
 
 ## Current Objective
 
-Track 012 **IN PROGRESS** — Product Quantization (PQ) for HNSW.
+Track 012 **IN PROGRESS** — Product Quantization (PQ) for HNSW. *(Historical. Track 012 landed; see `conductor.md`.)*
 
 ## ChangeGuard State
 

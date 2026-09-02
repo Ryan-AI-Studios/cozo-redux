@@ -65,7 +65,7 @@ This fork is actively maintained for production use. Key changes since upstream:
 
 * **Query Parallelization** — parallel joins, filters, and unification via `rayon` (Track 007).
 * **Memory Efficiency** — `DataValue` shrinking (≤ 32 bytes) and `SmallVec` tuples (Track 006).
-* **Storage Optimizations** — `TempStore` write-buffering, allocation-free range scans, sled range bound elimination (Track 008).
+* **Storage Optimizations** — `TempStore` write-buffering, allocation-free range scans, fjall range bound elimination (Track 008).
 * **HNSW Graph Repair** — automatic reconnection of neighbors on node deletion to prevent graph disconnection (Track 010).
 * **HNSW Predicate Filtering** — in-loop predicate filtering with biased traversal and `ef` expansion (Track 011).
 * **Product Quantization** — `::hnsw train_pq` for codebook training, vector encoding, and approximate distance search (Track 012).
@@ -292,7 +292,7 @@ For the storage column:
 * M: in-memory, non-persistent backend
 * Q: [SQLite](https://www.sqlite.org/) storage backend
 * R: [RocksDB](http://rocksdb.org/) storage backend
-* S: [Sled](https://github.com/spacejam/sled) storage backend
+* S: [Fjall](https://github.com/fjall-rs/fjall) storage backend
 * T: [TiKV](https://tikv.org/) distributed storage backend
 
 The [Rust doc](https://docs.rs/cozo/) has some tips on choosing storage,
@@ -344,7 +344,7 @@ with range scan capabilities. There are various implementations:
 * In-memory, non-persistent backend
 * [SQLite](https://www.sqlite.org/) storage backend
 * [RocksDB](http://rocksdb.org/) storage backend
-* [Sled](https://github.com/spacejam/sled) storage backend
+* [Fjall](https://github.com/fjall-rs/fjall) storage backend
 * [TiKV](https://tikv.org/) distributed storage backend
 
 Depending on the build configuration, not all backends may be available

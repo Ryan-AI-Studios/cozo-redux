@@ -2,13 +2,13 @@
 
 ## Context
 
-ChangeGuard consumes this repository as a git dependency:
+**Ledgerful** (retired name: ChangeGuard) consumes this repository as a git dependency:
 
 ```toml
-cozo = { git = "https://github.com/UnlikelyKiller/cozo-redux", default-features = false, features = ["storage-sled", "graph-algo", "rayon"] }
+cozo = { git = "https://github.com/UnlikelyKiller/cozo-redux", default-features = false, features = ["storage-fjall", "graph-algo", "rayon"] }
 ```
 
-GitHub Dependabot reported a high-severity alert in ChangeGuard for
+GitHub Dependabot reported a high-severity alert in Ledgerful (then named ChangeGuard) for
 `lz4_flex`:
 
 ```text
@@ -36,7 +36,7 @@ lz4_flex = "0.12.1"
 In this repository's own workspace, that resolves to `lz4_flex 0.12.2`, which
 is above the fixed `0.11.6` floor.
 
-However, Cargo patches are not transitive. When ChangeGuard depends on
+However, Cargo patches are not transitive. When Ledgerful depends on
 CozoDB-redux as a git dependency, the `[patch.crates-io]` section from this
 workspace is not applied by the downstream crate. Downstream users therefore
 still resolve:
@@ -62,13 +62,13 @@ downstream crates actually consume. Viable options:
    `cozo-core` to that release.
 
 Simply updating the workspace-level `[patch.crates-io]` is not sufficient for
-ChangeGuard or any other downstream git dependency consumer.
+Ledgerful or any other downstream git dependency consumer.
 
 ## Compatibility Notes
 
 - `swapvec 0.4.2` was checked and still depends on `lz4_flex 0.10.0`, so a
   plain `swapvec` version bump does not clear the alert.
-- ChangeGuard updating its CozoDB-redux git revision to current `main` also
+- Ledgerful updating its CozoDB-redux git revision to current `main` also
   does not clear the alert unless the downstream crate adds its own patch.
 - The fix should be validated by running a downstream dependency tree check:
 
@@ -81,7 +81,7 @@ For a successful fix, that command should no longer find a path through
 
 ## Suggested Verification
 
-After changing the dependency path, verify both CozoDB-redux and ChangeGuard:
+After changing the dependency path, verify both CozoDB-redux and Ledgerful:
 
 ```powershell
 cargo fmt --all -- --check
@@ -89,10 +89,10 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test
 ```
 
-For ChangeGuard specifically, also run:
+For Ledgerful specifically, also run:
 
 ```powershell
 cargo tree -i lz4_flex@0.10.0
 cargo test --test cozo_vector_ops --test semantic_search
-changeguard verify
+ledgerful verify --scope fast
 ```

@@ -25,7 +25,7 @@ done
 
 #for TARGET in x86_64-unknown-linux-gnu; do
 #  CROSS_CONTAINER_ENGINE=podman PROTOC=$PWD/tools/protoc CARGO_PROFILE_RELEASE_LTO=fat cross build --release -p cozo-bin \
-#    -F compact -F storage-rocksdb -F storage-tikv -F storage-sled --target $TARGET
+#    -F compact -F storage-rocksdb -F storage-tikv -F storage-fjall --target $TARGET
 #  cp target/$TARGET/release/cozo-bin release/cozo_all-$VERSION-$TARGET # standalone
 #done
 

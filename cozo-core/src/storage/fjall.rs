@@ -21,15 +21,15 @@ use crate::runtime::relation::decode_tuple_from_kv;
 use crate::storage::{Storage, StoreTx};
 use crate::utils::{swap_option_result, TempCollector};
 
-/// Creates a Sled database object (backed by Fjall). Experimental.
+/// Creates a Fjall database object. Experimental.
 /// You should use [`new_cozo_rocksdb`](crate::new_cozo_rocksdb) or
 /// [`new_cozo_sqlite`](crate::new_cozo_sqlite) instead.
-pub fn new_cozo_sled(path: impl AsRef<Path>) -> Result<crate::Db<SledStorage>> {
+pub fn new_cozo_fjall(path: impl AsRef<Path>) -> Result<crate::Db<FjallStorage>> {
     let db = Database::builder(path.as_ref()).open().into_diagnostic()?;
     let partition = db
         .keyspace("default", KeyspaceCreateOptions::default)
         .into_diagnostic()?;
-    let ret = crate::Db::new(SledStorage {
+    let ret = crate::Db::new(FjallStorage {
         db: Arc::new(db),
         partition,
     })?;
@@ -38,22 +38,22 @@ pub fn new_cozo_sled(path: impl AsRef<Path>) -> Result<crate::Db<SledStorage>> {
     Ok(ret)
 }
 
-/// Storage engine using Sled (backed by Fjall)
+/// Storage engine using Fjall
 #[derive(Clone)]
-pub struct SledStorage {
+pub struct FjallStorage {
     db: Arc<Database>,
     partition: Keyspace,
 }
 
-impl Storage<'_> for SledStorage {
-    type Tx = SledTx;
+impl Storage<'_> for FjallStorage {
+    type Tx = FjallTx;
 
     fn storage_kind(&self) -> &'static str {
-        "sled"
+        "fjall"
     }
 
     fn transact(&self, _write: bool) -> Result<Self::Tx> {
-        Ok(SledTx {
+        Ok(FjallTx {
             partition: self.partition.clone(),
             db: self.db.clone(),
             changes: BTreeMap::new(),
@@ -78,13 +78,13 @@ impl Storage<'_> for SledStorage {
     }
 }
 
-pub struct SledTx {
+pub struct FjallTx {
     partition: Keyspace,
     db: Arc<Database>,
     changes: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
-impl<'s> StoreTx<'s> for SledTx {
+impl<'s> StoreTx<'s> for FjallTx {
     #[inline]
     fn get(&self, key: &[u8], _for_update: bool) -> Result<Option<Vec<u8>>> {
         if let Some(opt_val) = self.changes.get(key) {
@@ -158,7 +158,7 @@ impl<'s> StoreTx<'s> for SledTx {
     {
         let changes_iter = self.changes.range(lower.to_vec()..upper.to_vec());
         let db_iter = self.partition.range(lower.to_vec()..upper.to_vec());
-        Box::new(SledIter {
+        Box::new(FjallIter {
             changes_iter,
             db_iter,
             change_cache: None,
@@ -173,7 +173,7 @@ impl<'s> StoreTx<'s> for SledTx {
         _valid_at: ValidityTs,
     ) -> Box<dyn Iterator<Item = Result<Tuple>> + 'a> {
         Box::new(iter::once(Err(miette!(
-            "Sled backend does not support time travelling."
+            "Fjall backend does not support time travelling."
         ))))
     }
 
@@ -187,7 +187,7 @@ impl<'s> StoreTx<'s> for SledTx {
     {
         let changes_iter = self.changes.range(lower.to_vec()..upper.to_vec());
         let db_iter = self.partition.range(lower.to_vec()..upper.to_vec());
-        Box::new(SledIterRaw {
+        Box::new(FjallIterRaw {
             changes_iter,
             db_iter,
             change_cache: None,
@@ -201,7 +201,7 @@ impl<'s> StoreTx<'s> for SledTx {
     {
         let changes_iter = self.changes.range(lower.to_vec()..upper.to_vec());
         let db_iter = self.partition.range(lower.to_vec()..upper.to_vec());
-        Ok(SledIterRaw {
+        Ok(FjallIterRaw {
             changes_iter,
             db_iter,
             change_cache: None,
@@ -218,7 +218,7 @@ impl<'s> StoreTx<'s> for SledTx {
     }
 }
 
-struct SledIterRaw<'a, C, D>
+struct FjallIterRaw<'a, C, D>
 where
     C: Iterator<Item = (&'a Vec<u8>, &'a Option<Vec<u8>>)>,
     D: Iterator<Item = fjall::Guard>,
@@ -229,7 +229,7 @@ where
     db_cache: Option<(Vec<u8>, Vec<u8>)>,
 }
 
-impl<'a, C, D> SledIterRaw<'a, C, D>
+impl<'a, C, D> FjallIterRaw<'a, C, D>
 where
     C: Iterator<Item = (&'a Vec<u8>, &'a Option<Vec<u8>>)>,
     D: Iterator<Item = fjall::Guard>,
@@ -296,7 +296,7 @@ where
     }
 }
 
-impl<'a, C, D> Iterator for SledIterRaw<'a, C, D>
+impl<'a, C, D> Iterator for FjallIterRaw<'a, C, D>
 where
     C: Iterator<Item = (&'a Vec<u8>, &'a Option<Vec<u8>>)>,
     D: Iterator<Item = fjall::Guard>,
@@ -309,7 +309,7 @@ where
     }
 }
 
-struct SledIter<'a, C, D>
+struct FjallIter<'a, C, D>
 where
     C: Iterator<Item = (&'a Vec<u8>, &'a Option<Vec<u8>>)>,
     D: Iterator<Item = fjall::Guard>,
@@ -320,7 +320,7 @@ where
     db_cache: Option<(Vec<u8>, Vec<u8>)>,
 }
 
-impl<'a, C, D> SledIter<'a, C, D>
+impl<'a, C, D> FjallIter<'a, C, D>
 where
     C: Iterator<Item = (&'a Vec<u8>, &'a Option<Vec<u8>>)>,
     D: Iterator<Item = fjall::Guard>,
@@ -389,7 +389,7 @@ where
     }
 }
 
-impl<'a, C, D> Iterator for SledIter<'a, C, D>
+impl<'a, C, D> Iterator for FjallIter<'a, C, D>
 where
     C: Iterator<Item = (&'a Vec<u8>, &'a Option<Vec<u8>>)>,
     D: Iterator<Item = fjall::Guard>,
@@ -410,7 +410,7 @@ mod tests {
     #[test]
     fn fjall_put_get_round_trip() -> Result<()> {
         let dir = tempdir().into_diagnostic()?;
-        let db = new_cozo_sled(dir.path())?;
+        let db = new_cozo_fjall(dir.path())?;
 
         let tx = db.db.transact(true)?;
         assert!(tx.get(b"non-existent", false)?.is_none());
@@ -434,7 +434,7 @@ mod tests {
     #[test]
     fn fjall_delete_hides_committed_key() -> Result<()> {
         let dir = tempdir().into_diagnostic()?;
-        let db = new_cozo_sled(dir.path())?;
+        let db = new_cozo_fjall(dir.path())?;
 
         let mut tx = db.db.transact(true)?;
         tx.put(b"k1", b"v1")?;
@@ -454,7 +454,7 @@ mod tests {
     #[test]
     fn fjall_range_scan_merges_uncommitted_changes() -> Result<()> {
         let dir = tempdir().into_diagnostic()?;
-        let db = new_cozo_sled(dir.path())?;
+        let db = new_cozo_fjall(dir.path())?;
 
         let mut tx = db.db.transact(true)?;
         tx.put(b"k2", b"v2")?;
@@ -485,21 +485,111 @@ mod tests {
 
     #[test]
     fn fjall_durability_across_reopen() -> Result<()> {
+        use crate::DbInstance;
+        use crate::ScriptMutability;
+        use std::collections::BTreeMap;
+
         let dir = tempdir().into_diagnostic()?;
         let path = dir.path();
 
         {
-            let db = new_cozo_sled(path)?;
-            let mut tx = db.db.transact(true)?;
-            tx.put(b"persist_me", b"iamhere")?;
-            tx.commit()?;
-            // DB is dropped here
+            let db = DbInstance::new("fjall", path, Default::default())?;
+            db.run_script(
+                "?[a] <- [['iamhere']]; :create persist_me {a}",
+                BTreeMap::new(),
+                ScriptMutability::Mutable,
+            )?;
         }
 
         {
-            let db = new_cozo_sled(path)?;
-            let tx = db.db.transact(false)?;
-            assert_eq!(tx.get(b"persist_me", false)?.unwrap(), b"iamhere");
+            let db = DbInstance::new("fjall", path, Default::default())?;
+            let res = db.run_script(
+                "?[a] := *persist_me{a}",
+                BTreeMap::new(),
+                ScriptMutability::Immutable,
+            )?;
+            assert_eq!(res.rows[0][0].get_str(), Some("iamhere"));
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn fjall_backup_restore_import_export() -> Result<()> {
+        use crate::DbInstance;
+        use crate::ScriptMutability;
+
+        let dir = tempdir().into_diagnostic()?;
+        let path = dir.path();
+
+        let db_dir = path.join("db");
+        let backup_file = path.join("backup.cozobak");
+
+        // 1. Create a DB, write some data, backup, and export
+        println!("1. Creating DB");
+        let db = DbInstance::new("fjall", &db_dir, Default::default())?;
+        println!("2. Creating table");
+        db.run_script(
+            ":create data_table {a => b}",
+            BTreeMap::new(),
+            ScriptMutability::Mutable,
+        )?;
+        println!("3. Putting row 1");
+        db.run_script(
+            "?[a, b] <- [[1, 'hello']] :put data_table {a => b}",
+            BTreeMap::new(),
+            ScriptMutability::Mutable,
+        )?;
+        println!("4. Putting row 2");
+        db.run_script(
+            "?[a, b] <- [[2, 'world']] :put data_table {a => b}",
+            BTreeMap::new(),
+            ScriptMutability::Mutable,
+        )?;
+
+        // Backup the DB
+        println!("5. Backing up");
+        db.backup_db(&backup_file)?;
+
+        // Export relations
+        println!("6. Exporting");
+        let exported_data = db.export_relations(["data_table".to_string()].iter())?;
+
+        // 2. Restore the backup to a new directory
+        let restore_dir = path.join("restore");
+        {
+            println!("7. Restoring");
+            let db = DbInstance::new("fjall", &restore_dir, Default::default())?;
+            db.restore_backup(&backup_file)?;
+
+            println!("8. Querying restored");
+            let res = db.run_script(
+                "?[a, b] := *data_table{a, b}",
+                BTreeMap::new(),
+                ScriptMutability::Immutable,
+            )?;
+            assert_eq!(res.rows.len(), 2);
+        }
+
+        // 3. Import the exported relations into a clean DB
+        let import_dir = path.join("import");
+        {
+            println!("9. Importing");
+            let db = DbInstance::new("fjall", &import_dir, Default::default())?;
+            db.run_script(
+                ":create data_table {a => b}",
+                BTreeMap::new(),
+                ScriptMutability::Mutable,
+            )?;
+            db.import_relations(exported_data)?;
+
+            println!("10. Querying imported");
+            let res = db.run_script(
+                "?[a, b] := *data_table{a, b}",
+                BTreeMap::new(),
+                ScriptMutability::Immutable,
+            )?;
+            assert_eq!(res.rows.len(), 2);
         }
 
         Ok(())

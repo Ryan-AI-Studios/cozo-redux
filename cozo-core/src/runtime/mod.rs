@@ -8,6 +8,8 @@
 
 pub(crate) mod callback;
 pub(crate) mod db;
+#[cfg(test)]
+mod graph_tests;
 pub(crate) mod hnsw;
 pub(crate) mod imperative;
 pub(crate) mod minhash_lsh;

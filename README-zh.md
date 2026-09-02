@@ -191,7 +191,7 @@ Cozo 可以安装在一大堆不同的语言与环境中：
 * M: 基于内存的非持久性存储引擎
 * Q: 基于 [SQLite](https://www.sqlite.org/) 的存储引擎
 * R: 基于 [RocksDB](http://rocksdb.org/) 的存储引擎
-* S: 基于 [Sled](https://github.com/spacejam/sled) 的存储引擎
+* S: 基于 [Fjall](https://github.com/fjall-rs/fjall) 的存储引擎
 * T: 基于 [TiKV](https://tikv.org/) 的分布式存储引擎
 
 Cozo 的 [Rust API 文档](https://docs.rs/cozo/)（英文）中有一些额外的关于存储选择的建议。
@@ -228,7 +228,7 @@ Cozo 数据库有三个上下游部分组成，其中每部分只调用下游部
 * 基于内存的非持久性存储引擎
 * 基于 [SQLite](https://www.sqlite.org/) 的存储引擎
 * 基于 [RocksDB](http://rocksdb.org/) 的存储引擎
-* 基于 [Sled](https://github.com/spacejam/sled) 的存储引擎
+* 基于 [Fjall](https://github.com/fjall-rs/fjall) 的存储引擎
 * 基于 [TiKV](https://tikv.org/) 的分布式存储引擎
 
 不是所有的二进制包都包含以上所有引擎。这些引擎中，SQLite 引擎具有特殊地位：Cozo 使用它的文件作为备份文件，用以在不同引擎的 Cozo 之间交换数据。Rust 使用者可以轻松实现自己的引擎（不是说写一个引擎很轻松，这里意思是把现有的引擎接入到 Cozo 里很轻松）。

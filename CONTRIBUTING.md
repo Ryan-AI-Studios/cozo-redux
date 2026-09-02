@@ -15,7 +15,7 @@ This is a maintained fork of the original [CozoDB](https://github.com/cozodb/coz
 * All code must pass `cargo fmt` and `cargo clippy --all-targets --all-features -- -D warnings`.
 * All tests must pass: `cargo test --workspace`.
 * If you change behavior, add a test.
-* If you change the query engine or storage layer, run ChangeGuard impact analysis (`changeguard scan --impact`) and document the risk.
+* If you change the query engine or storage layer, run Ledgerful `ledgerful change-context --json` and document the risk. Escalate `ledgerful scan --impact --json` only when the change is high-risk, multi-module, or `change-context` is not ready.
 
 ### What we are looking for
 

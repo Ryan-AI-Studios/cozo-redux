@@ -1,15 +1,9 @@
-use crate::{prelude::*, DEFAULT_PARALLELISM};
+use crate::prelude::*;
 
-use atomic_float::AtomicF64;
-use graph_builder::SharedMut;
 use log::info;
 use rayon::prelude::*;
 
-use std::sync::atomic::Ordering;
-use std::thread::available_parallelism;
 use std::time::Instant;
-
-const CHUNK_SIZE: usize = 16384;
 
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -79,9 +73,8 @@ where
         .collect_into_vec(&mut out_scores);
 
     let mut scores = vec![init_score; node_count];
-
-    let scores_ptr = SharedMut::new(scores.as_mut_ptr());
-    let out_scores_ptr = SharedMut::new(out_scores.as_mut_ptr());
+    let mut next_scores = vec![0.0_f32; node_count];
+    let mut next_out_scores = vec![0.0_f32; node_count];
 
     let mut iteration = 0;
 
@@ -91,9 +84,14 @@ where
             graph,
             base_score,
             damping_factor,
-            &out_scores_ptr,
-            &scores_ptr,
+            &out_scores,
+            &scores,
+            &mut next_out_scores,
+            &mut next_scores,
         );
+
+        std::mem::swap(&mut scores, &mut next_scores);
+        std::mem::swap(&mut out_scores, &mut next_out_scores);
 
         info!(
             "Finished iteration {} with an error of {:.6} in {:?}",
@@ -114,57 +112,34 @@ fn page_rank_iteration<NI, G>(
     graph: &G,
     base_score: f32,
     damping_factor: f32,
-    out_scores: &SharedMut<f32>,
-    scores: &SharedMut<f32>,
+    out_scores: &[f32],
+    scores: &[f32],
+    next_out_scores: &mut [f32],
+    next_scores: &mut [f32],
 ) -> f64
 where
     NI: Idx,
     G: Graph<NI> + DirectedDegrees<NI> + DirectedNeighbors<NI> + Sync,
 {
-    let next_chunk = Atomic::new(NI::zero());
-    let total_error = AtomicF64::new(0_f64);
+    next_scores
+        .par_iter_mut()
+        .zip(next_out_scores.par_iter_mut())
+        .enumerate()
+        .map(|(u_idx, (next_score, next_out_score))| {
+            let u = NI::new(u_idx);
+            let incoming_total = graph
+                .in_neighbors(u)
+                .map(|v| out_scores[v.index()])
+                .sum::<f32>();
 
-    std::thread::scope(|s| {
-        let num_threads = available_parallelism().map_or(DEFAULT_PARALLELISM, |p| p.get());
+            let old_score = scores[u_idx];
+            let new_score = base_score + damping_factor * incoming_total;
+            *next_score = new_score;
+            *next_out_score = new_score / graph.out_degree(u).index() as f32;
 
-        for _ in 0..num_threads {
-            s.spawn(|| {
-                let mut error = 0_f64;
-
-                loop {
-                    let start = NI::fetch_add(&next_chunk, NI::new(CHUNK_SIZE), Ordering::AcqRel);
-                    if start >= graph.node_count() {
-                        break;
-                    }
-
-                    let end = (start + NI::new(CHUNK_SIZE)).min(graph.node_count());
-
-                    for u in start.range(end) {
-                        let incoming_total = graph
-                            .in_neighbors(u)
-                            .map(|v| unsafe { out_scores.add(v.index()).read() })
-                            .sum::<f32>();
-
-                        let old_score = unsafe { scores.add(u.index()).read() };
-                        let new_score = base_score + damping_factor * incoming_total;
-
-                        unsafe { scores.add(u.index()).write(new_score) };
-                        let diff = (new_score - old_score) as f64;
-                        error += f64::abs(diff);
-
-                        unsafe {
-                            out_scores
-                                .add(u.index())
-                                .write(new_score / graph.out_degree(u).index() as f32)
-                        }
-                    }
-                }
-                total_error.fetch_add(error, Ordering::SeqCst);
-            });
-        }
-    });
-
-    total_error.load(Ordering::SeqCst)
+            f64::abs((new_score - old_score) as f64)
+        })
+        .sum()
 }
 
 #[cfg(test)]
