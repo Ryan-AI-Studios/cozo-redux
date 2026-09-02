@@ -1477,13 +1477,23 @@ impl<'s, S: Storage<'s>> Db<S> {
         }
     }
     fn run_sys_op(&'s self, op: SysOp, read_only: bool) -> Result<NamedRows> {
+        let stats = matches!(&op, SysOp::CreateVectorIndex(_))
+            && crate::runtime::hnsw_create_stats::enabled();
+        if stats {
+            crate::runtime::hnsw_create_stats::reset();
+        }
         let mut tx = if read_only {
             self.transact()?
         } else {
             self.transact_write()?
         };
         let res = self.run_sys_op_with_tx(&mut tx, &op, read_only, false)?;
-        tx.commit_tx()?;
+        if stats {
+            crate::runtime::hnsw_create_stats::record_commit(|| tx.commit_tx())?;
+            crate::runtime::hnsw_create_stats::dump_stderr();
+        } else {
+            tx.commit_tx()?;
+        }
         Ok(res)
     }
     /// This is the entry to query evaluation

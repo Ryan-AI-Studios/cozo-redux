@@ -12,6 +12,7 @@ use crate::data::relation::VecElementType;
 use crate::data::tuple::{Tuple, ENCODED_KEY_MIN_LEN};
 use crate::data::value::Vector;
 use crate::parse::sys::HnswDistance;
+use crate::runtime::hnsw_create_stats;
 use crate::runtime::relation::RelationHandle;
 use crate::runtime::transact::SessionTx;
 use crate::{DataValue, SourceSpan};
@@ -262,7 +263,15 @@ impl VectorCache {
         handle: &RelationHandle,
         tx: &SessionTx<'_>,
     ) -> Result<()> {
-        if !self.cache.contains_key(key) {
+        let cached = self.cache.contains_key(key);
+        if hnsw_create_stats::is_active() {
+            if cached {
+                hnsw_create_stats::record_cache_hit();
+            } else {
+                hnsw_create_stats::record_cache_miss();
+            }
+        }
+        if !cached {
             match handle.get(tx, &key.0)? {
                 Some(tuple) => {
                     let mut field = &tuple[key.1];
@@ -335,6 +344,10 @@ impl VectorCache {
 }
 
 impl<'a> SessionTx<'a> {
+    pub(crate) fn hnsw_store_put(&mut self, key: &[u8], val: &[u8]) -> Result<()> {
+        hnsw_create_stats::time_put(|| self.store_tx.put(key, val))
+    }
+
     fn hnsw_put_vector(
         &mut self,
         tuple: &[DataValue],
@@ -471,8 +484,7 @@ impl<'a> SessionTx<'a> {
                     idx_table.encode_key_for_store(&self_tuple_key, Default::default())?;
                 let self_tuple_val_bytes =
                     idx_table.encode_val_only_for_store(&self_tuple_val, Default::default())?;
-                self.store_tx
-                    .put(&self_tuple_key_bytes, &self_tuple_val_bytes)?;
+                self.hnsw_store_put(&self_tuple_key_bytes, &self_tuple_val_bytes)?;
 
                 // add bidirectional links
                 for (neighbour, Reverse(OrderedFloat(dist))) in neighbours.iter() {
@@ -493,7 +505,7 @@ impl<'a> SessionTx<'a> {
                         idx_table.encode_key_for_store(&out_key, Default::default())?;
                     let out_val_bytes =
                         idx_table.encode_val_only_for_store(&out_val, Default::default())?;
-                    self.store_tx.put(&out_key_bytes, &out_val_bytes)?;
+                    self.hnsw_store_put(&out_key_bytes, &out_val_bytes)?;
 
                     let mut in_key = Vec::with_capacity(orig_table.metadata.keys.len() * 2 + 5);
                     let in_val = vec![
@@ -513,7 +525,7 @@ impl<'a> SessionTx<'a> {
                         idx_table.encode_key_for_store(&in_key, Default::default())?;
                     let in_val_bytes =
                         idx_table.encode_val_only_for_store(&in_val, Default::default())?;
-                    self.store_tx.put(&in_key_bytes, &in_val_bytes)?;
+                    self.hnsw_store_put(&in_key_bytes, &in_val_bytes)?;
 
                     // shrink links if necessary
                     let mut target_self_key =
@@ -553,7 +565,7 @@ impl<'a> SessionTx<'a> {
                     }
                     // update degree
                     target_self_val[0] = DataValue::from(target_degree as f64);
-                    self.store_tx.put(
+                    self.hnsw_store_put(
                         &target_self_key_bytes,
                         &idx_table
                             .encode_val_only_for_store(&target_self_val, Default::default())?,
@@ -641,7 +653,7 @@ impl<'a> SessionTx<'a> {
                 let new_key_bytes = idx_table.encode_key_for_store(&new_key, Default::default())?;
                 let new_val_bytes =
                     idx_table.encode_val_only_for_store(&new_val, Default::default())?;
-                self.store_tx.put(&new_key_bytes, &new_val_bytes)?;
+                self.hnsw_store_put(&new_key_bytes, &new_val_bytes)?;
             }
         }
         for (old, OrderedFloat(old_dist)) in candidates {
@@ -676,7 +688,7 @@ impl<'a> SessionTx<'a> {
                     ];
                     let old_val_bytes =
                         idx_table.encode_val_only_for_store(&old_val, Default::default())?;
-                    self.store_tx.put(&old_key_bytes, &old_val_bytes)?;
+                    self.hnsw_store_put(&old_key_bytes, &old_val_bytes)?;
                 }
             }
         }
@@ -820,9 +832,12 @@ impl<'a> SessionTx<'a> {
             visited.extend(unvisited.iter().cloned());
 
             // Load vectors sequentially (requires store access via &mut vec_cache).
-            for key in &unvisited {
-                vec_cache.ensure_key(key, orig_table, self)?;
-            }
+            hnsw_create_stats::time_ensure_batch(unvisited.len(), || {
+                for key in &unvisited {
+                    vec_cache.ensure_key(key, orig_table, self)?;
+                }
+                Ok(())
+            })?;
 
             // Load PQ codes if available.
             if pq_dist_table.is_some() {
@@ -833,7 +848,8 @@ impl<'a> SessionTx<'a> {
 
             // Compute distances. The immutable reborrow of vec_cache is safe here
             // because all ensure_key mutations for this batch are complete.
-            let distances: Vec<f64> = {
+            // Time the whole batch; never Instant inside par_iter.
+            let distances: Vec<f64> = hnsw_create_stats::time_dist_batch(|| {
                 let cache_ref: &VectorCache = &*vec_cache;
                 let pq_compute = |k: &CompoundKey| {
                     if let Some(dt) = pq_dist_table {
@@ -846,23 +862,21 @@ impl<'a> SessionTx<'a> {
                     }
                 };
                 #[cfg(feature = "rayon")]
-                if unvisited.len() >= HNSW_PAR_DIST_THRESHOLD {
-                    unvisited
-                        .par_iter()
-                        .map(pq_compute)
-                        .collect::<Result<Vec<_>>>()?
-                } else {
-                    unvisited
-                        .iter()
-                        .map(pq_compute)
-                        .collect::<Result<Vec<_>>>()?
+                {
+                    if unvisited.len() >= HNSW_PAR_DIST_THRESHOLD {
+                        unvisited
+                            .par_iter()
+                            .map(pq_compute)
+                            .collect::<Result<Vec<_>>>()
+                    } else {
+                        unvisited.iter().map(pq_compute).collect::<Result<Vec<_>>>()
+                    }
                 }
                 #[cfg(not(feature = "rayon"))]
-                unvisited
-                    .iter()
-                    .map(pq_compute)
-                    .collect::<Result<Vec<_>>>()?
-            };
+                {
+                    unvisited.iter().map(pq_compute).collect::<Result<Vec<_>>>()
+                }
+            })?;
 
             // Update heaps sequentially.
             for (key, dist) in unvisited.into_iter().zip(distances) {
@@ -1017,17 +1031,31 @@ impl<'a> SessionTx<'a> {
         let canary_key_bytes = idx_table.encode_key_for_store(&canary_key, Default::default())?;
         let canary_value_bytes =
             idx_table.encode_val_only_for_store(&canary_value, Default::default())?;
-        self.store_tx.put(&canary_key_bytes, &canary_value_bytes)?;
+        self.hnsw_store_put(&canary_key_bytes, &canary_value_bytes)?;
 
         for cur_level in bottom_level..=top_level {
             target_key[0] = DataValue::from(cur_level);
             let key = idx_table.encode_key_for_store(&target_key, Default::default())?;
             let val = idx_table.encode_val_only_for_store(&target_value, Default::default())?;
-            self.store_tx.put(&key, &val)?;
+            self.hnsw_store_put(&key, &val)?;
         }
         Ok(())
     }
     pub(crate) fn hnsw_put(
+        &mut self,
+        manifest: &HnswIndexManifest,
+        orig_table: &RelationHandle,
+        idx_table: &RelationHandle,
+        filter: Option<&Vec<Bytecode>>,
+        stack: &mut Vec<DataValue>,
+        tuple: &[DataValue],
+    ) -> Result<bool> {
+        hnsw_create_stats::record_hnsw_put(|| {
+            self.hnsw_put_body(manifest, orig_table, idx_table, filter, stack, tuple)
+        })
+    }
+
+    fn hnsw_put_body(
         &mut self,
         manifest: &HnswIndexManifest,
         orig_table: &RelationHandle,
@@ -1066,6 +1094,7 @@ impl<'a> SessionTx<'a> {
             pq_codebook: None,
             pq_codes: Default::default(),
         };
+        hnsw_create_stats::record_cache_instance();
         for (vec, idx, sub) in extracted_vectors {
             self.hnsw_put_vector(
                 tuple,
@@ -1210,7 +1239,7 @@ impl<'a> SessionTx<'a> {
                 DataValue::Null,
                 DataValue::from(false),
             ];
-            self.store_tx.put(
+            self.hnsw_store_put(
                 &idx_table.encode_key_for_store(&out_key, Default::default())?,
                 &idx_table.encode_val_only_for_store(&edge_val, Default::default())?,
             )?;
@@ -1223,7 +1252,7 @@ impl<'a> SessionTx<'a> {
             in_key.extend_from_slice(&target_key.0);
             in_key.push(DataValue::from(target_key.1 as i64));
             in_key.push(DataValue::from(target_key.2 as i64));
-            self.store_tx.put(
+            self.hnsw_store_put(
                 &idx_table.encode_key_for_store(&in_key, Default::default())?,
                 &idx_table.encode_val_only_for_store(&edge_val, Default::default())?,
             )?;
@@ -1253,7 +1282,7 @@ impl<'a> SessionTx<'a> {
                     new_nbr_degree
                 };
                 val[0] = DataValue::from(actual as f64);
-                self.store_tx.put(
+                self.hnsw_store_put(
                     &nbr_self_key_bytes,
                     &idx_table.encode_val_only_for_store(&val, Default::default())?,
                 )?;
@@ -1276,7 +1305,7 @@ impl<'a> SessionTx<'a> {
                 "Node metadata is empty or corrupted during degree update"
             );
             val[0] = DataValue::from(new_degree as f64);
-            self.store_tx.put(
+            self.hnsw_store_put(
                 &target_self_key_bytes,
                 &idx_table.encode_val_only_for_store(&val, Default::default())?,
             )?;
@@ -1371,7 +1400,7 @@ impl<'a> SessionTx<'a> {
                         .ok_or_else(|| miette!("Invalid degree"))?
                         - 1.,
                 );
-                self.store_tx.put(
+                self.hnsw_store_put(
                     &idx_table.encode_key_for_store(&neighbour_self_key, Default::default())?,
                     &idx_table.encode_val_only_for_store(&neighbour_val, Default::default())?,
                 )?;
@@ -1426,7 +1455,7 @@ impl<'a> SessionTx<'a> {
                 ];
                 let canary_value_bytes =
                     idx_table.encode_val_only_for_store(&canary_value, Default::default())?;
-                self.store_tx.put(&canary_key_bytes, &canary_value_bytes)?;
+                self.hnsw_store_put(&canary_key_bytes, &canary_value_bytes)?;
             } else {
                 self.store_tx.del(&canary_key_bytes)?;
             }
@@ -1801,7 +1830,7 @@ impl<'a> SessionTx<'a> {
         ];
         let key_bytes = idx_handle.encode_key_for_store(&cb_key, Default::default())?;
         let val_bytes = idx_handle.encode_val_only_for_store(&cb_val, Default::default())?;
-        self.store_tx.put(&key_bytes, &val_bytes)?;
+        self.hnsw_store_put(&key_bytes, &val_bytes)?;
         Ok(())
     }
 
@@ -1851,7 +1880,7 @@ impl<'a> SessionTx<'a> {
         let pq_val = [DataValue::Bytes(codes.to_vec())];
         let key_bytes = idx_handle.encode_key_for_store(&pq_key, Default::default())?;
         let val_bytes = idx_handle.encode_val_only_for_store(&pq_val, Default::default())?;
-        self.store_tx.put(&key_bytes, &val_bytes)?;
+        self.hnsw_store_put(&key_bytes, &val_bytes)?;
         Ok(())
     }
 
