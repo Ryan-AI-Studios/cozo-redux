@@ -139,7 +139,7 @@ fn kmeans_lloyd(data: &[Vec<f32>], k: usize, max_iter: usize) -> Vec<Vec<f32>> {
     centroids
 }
 
-fn encode_vector_pq(vector: &Vector, codebook: &PqCodebook) -> Result<Vec<u8>> {
+pub(crate) fn encode_vector_pq(vector: &Vector, codebook: &PqCodebook) -> Result<Vec<u8>> {
     let Vector::F32(arr) = vector else {
         bail!("encode_vector_pq only supports F32 vectors");
     };
@@ -1626,6 +1626,17 @@ impl<'a> SessionTx<'a> {
                 return Ok(vec![]);
             }
 
+            // Exact metric via v_dist on PQ survivors. Vectors are already in cache.
+            if pq_dist_table.is_some() {
+                let keys: Vec<_> = found_nn.iter().map(|(k, _)| k.clone()).collect();
+                let mut exact = PriorityQueue::new();
+                for key in keys {
+                    let d = vec_cache.v_dist(&q, &key)?;
+                    exact.push(key, OrderedFloat(d));
+                }
+                found_nn = exact;
+            }
+
             if config.filter.is_none() {
                 while found_nn.len() > config.k {
                     found_nn.pop();
@@ -1722,6 +1733,11 @@ impl<'a> SessionTx<'a> {
             manifest.dtype == VecElementType::F32,
             "PQ training only supported for F32 vectors"
         );
+        ensure!(
+            manifest.distance == HnswDistance::L2,
+            "PQ training is only supported for L2 indexes (got {:?})",
+            manifest.distance
+        );
         let dim = manifest.vec_dim;
         ensure!(
             dim % num_subspaces == 0,
@@ -1729,7 +1745,11 @@ impl<'a> SessionTx<'a> {
             dim,
             num_subspaces
         );
-        ensure!(num_centroids >= 1, "num_centroids must be at least 1");
+        ensure!(
+            (1..=256).contains(&num_centroids),
+            "num_centroids must be between 1 and 256 (got {})",
+            num_centroids
+        );
 
         let sub_dim = dim / num_subspaces;
 

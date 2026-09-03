@@ -665,7 +665,11 @@ pub(crate) fn parse_sys(
                                     .eval_to_const()?
                                     .get_int()
                                     .ok_or_else(|| miette!("Invalid centroids: {}", opt_val_str))?;
-                                ensure!(v > 0, "centroids must be > 0");
+                                ensure!(
+                                    (1i64..=256).contains(&v),
+                                    "centroids must be between 1 and 256 (got {})",
+                                    v
+                                );
                                 num_centroids = v as usize;
                             }
                             "samples" => {

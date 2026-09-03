@@ -1,0 +1,15 @@
+{
+  "centroids": 256,
+  "create_instrumented_ms": 695371.2214,
+  "create_wall_ms": 695664.1217,
+  "dim": 768,
+  "dist_ms": 101176.8141,
+  "dist_pct": 14.550043341785038,
+  "encode_estimate_ms": 1343.0418,
+  "keep_construction_pq": false,
+  "lut_ms": 4.627,
+  "n": 14000,
+  "samples": 10000,
+  "subspaces": 8,
+  "train_pq_ms": 20202.3587
+}

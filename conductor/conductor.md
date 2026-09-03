@@ -6,7 +6,7 @@ Consumer of this fork: **Ledgerful** (`C:\dev\ledgerful`) git-deps CozoDB-redux 
 
 ## Active Tracks
 
-HNSW / create-speed **spikes**. **021 keep/kill is the authority** for 022–028. **023** KEEP (create-wide cache; 14k create 19.9→12.6 min). **025** measured skip-drop: **KILL** (B2 recall@10 vs A = 0.54; 16.0 min > A 11.9 min). **026** measured knobs: **KILL** a faster Ledgerful preset (stay `m:16`, `ef_construction:100`). Next implement: **027**, then **029**. **027** still needs a `train_pq` vs L2 create measurement. Do not implement 022 / 024 / 028.
+HNSW / create-speed **spikes**. **021 keep/kill is the authority** for 022–028. **023** KEEP (create-wide cache; 14k create 19.9→12.6 min). **025** measured skip-drop: **KILL** (B2 recall@10 vs A = 0.54; 16.0 min > A 11.9 min). **026** measured knobs: **KILL** a faster Ledgerful preset (stay `m:16`, `ef_construction:100`). **027** **KILL** construction-PQ (dist 14.55% of create; `train_pq` 20 s post-hoc). Next implement: **029**. Do not implement 022 / 024 / 028.
 
 | Track ID | Status | Objective | Folder |
 | :--- | :--- | :--- | :--- |
@@ -16,7 +16,7 @@ HNSW / create-speed **spikes**. **021 keep/kill is the authority** for 022–028
 | **024** | Killed (021) | Bulk create / put batching. Put **0.94%** ≪ 30% (count is high; wall is not) | [track024-hnsw-bulk-create](track024-hnsw-bulk-create/) |
 | **025** | Completed | Incremental index / `::hnsw optimize`. **KILL** skip-drop — B2 recall 0.54, 16.0 min > A 11.9 min | [track025-hnsw-incremental-optimize](track025-hnsw-incremental-optimize/) |
 | **026** | Completed | Fast-build presets. **KILL** faster Ledgerful knobs; stay `m:16`, `ef_construction:100` | [track026-hnsw-fast-build-presets](track026-hnsw-fast-build-presets/) |
-| **027** | Ready — not started | PQ on construction (`::hnsw train_pq`). **Not KEEP** — `train_pq` not measured in 021 | [track027-pq-on-construction](track027-pq-on-construction/) |
+| **027** | Completed | PQ on construction (`::hnsw train_pq`). **KILL** construction-PQ; L2 guard + centroid bound + re-rank | [track027-pq-on-construction](track027-pq-on-construction/) |
 | **028** | Killed (021) | GPU distance oracle. Dist does not dominate; mean batch ~20.8, not ≫ m | [track028-gpu-distance-oracle](track028-gpu-distance-oracle/) |
 | **029** | Ready — not started | Track 009 Phase 3: parallel KNN across parent tuples (`SessionTx::hnsw_knn`; **D-009-01**) | [track029-parallel-knn-parent-tuples](track029-parallel-knn-parent-tuples/) |
 
@@ -28,13 +28,14 @@ Engine file for 021–029: `cozo-core/src/runtime/hnsw.rs`. Create path: `create
 | :--- | :--- |
 | Post-Codex remediations | Landed on `main` (`128012d4`): fjall feature/API rename, pyo3, vendor graph. Working tree is clean. Not a new track. |
 | Track 009 Phase 3 | Deferred on purpose; queued as **029** (Ready — not started). |
-| Track 012 PQ gaps | In-tree: `::hnsw train_pq`, encode, approx L2. Not used on Ledgerful create. Re-rank, cosine, `hnsw_convert_to_pq` belong in **027**. |
+| Track 012 PQ gaps | In-tree: `::hnsw train_pq`, encode, approx L2, exact re-rank, L2 `train_pq` guard, centroid `1..=256`. Construction-PQ **killed**. Convert won’t-do. D-012-01 remains open (cosine ADC). |
 
 ## Completed Tracks
 
 | Track ID | Objective | Landed |
 | :--- | :--- | :--- |
-| **025** | Incremental HNSW vs rebuild; KILL skip-drop; B2 recall 0.54, 16.0 min > A 11.9 min | *(SHA after squash)* |
+| **027** | PQ construction kill; L2 train_pq guard; centroid 1..=256; exact re-rank | *(SHA after squash)* |
+| **025** | Incremental HNSW vs rebuild; KILL skip-drop; B2 recall 0.54, 16.0 min > A 11.9 min | `0899e084` (#4) |
 | **023** | Prefetch / cache-fill; KEEP create-wide VectorCache; 19.9→12.6 min | `056d189a` (#3) |
 | **026** | Fast-build presets; KILL faster Ledgerful knobs; stay m:16 ef_construction:100 | `0447d02a` (#2) |
 | **021** | HNSW create baseline (cost model); keep/kill for 022–028 | `2710891b` (#1) |

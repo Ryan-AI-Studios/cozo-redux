@@ -15,7 +15,7 @@ Med/high never belong here — they block the owning track.
 
 | ID | Severity | Item | Notes | Owner |
 |---|---|---|---|---|
-| D-012-01 | — | PQ on construction; re-rank; cosine; `hnsw_convert_to_pq` | Ledgerful create does not `train_pq`. Live sysop is `::hnsw train_pq` (no train-residual / convert). **027** spec Ready — not started. Split kill gates: (a) post-hoc `train_pq` vs L2 create; (b) construction-PQ estimate. Killing construction-PQ does **not** close this row and does **not** park re-rank / cosine `train_pq` guard / convert as “won’t do”. Convert may be “won’t do” in the design note without closing the row. | **027** |
+| D-012-01 | — | PQ on construction; re-rank; cosine; `hnsw_convert_to_pq` | **027** killed construction-PQ (14k dist 14.55% of create). Landed: `train_pq` L2 guard, `num_centroids` 1..=256, exact `v_dist` re-rank. Convert documented **won’t do**. Cosine ADC still absent (L2 LUT still L2-only). **Do not close** this row. | **027** residual |
 
 ## From Track 021 (HNSW create baseline)
 
