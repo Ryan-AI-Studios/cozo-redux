@@ -24,6 +24,6 @@
 
 | Item | Value |
 | :--- | :--- |
-| Branch | `track/025-hnsw-incremental-optimize` |
-| PR | *(filled after open)* |
-| SHA | *(filled after squash-merge)* |
+| Branch | `track/025-hnsw-incremental-optimize` (deleted after squash) |
+| PR | [#4](https://github.com/Ryan-AI-Studios/cozo-redux/pull/4) |
+| SHA | `0899e084` |
