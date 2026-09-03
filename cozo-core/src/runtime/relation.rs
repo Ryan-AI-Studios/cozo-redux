@@ -29,7 +29,7 @@ use crate::parse::expr::build_expr;
 use crate::parse::sys::{FtsIndexConfig, HnswIndexConfig, MinHashLshConfig};
 use crate::parse::{CozoScriptParser, Rule, SourceSpan};
 use crate::query::compile::IndexPositionUse;
-use crate::runtime::hnsw::HnswIndexManifest;
+use crate::runtime::hnsw::{HnswIndexManifest, VectorCache};
 use crate::runtime::minhash_lsh::{HashPermutations, LshParams, MinHashLshIndexManifest, Weights};
 use crate::runtime::transact::SessionTx;
 use crate::utils::TempCollector;
@@ -1195,14 +1195,17 @@ impl<'a> SessionTx<'a> {
             Some(&filter)
         };
         let mut stack = vec![];
+        let mut vec_cache = VectorCache::new(manifest.distance);
+        crate::runtime::hnsw_create_stats::record_cache_instance();
         for tuple in all_tuples.into_iter() {
-            self.hnsw_put(
+            self.hnsw_put_with_cache(
                 &manifest,
                 &rel_handle,
                 &idx_handle,
                 filter,
                 &mut stack,
                 &tuple,
+                &mut vec_cache,
             )?;
         }
 

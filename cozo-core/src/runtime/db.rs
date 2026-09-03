@@ -1478,7 +1478,7 @@ impl<'s, S: Storage<'s>> Db<S> {
     }
     fn run_sys_op(&'s self, op: SysOp, read_only: bool) -> Result<NamedRows> {
         let stats = matches!(&op, SysOp::CreateVectorIndex(_))
-            && crate::runtime::hnsw_create_stats::enabled();
+            && crate::runtime::hnsw_create_stats::should_instrument_create();
         if stats {
             crate::runtime::hnsw_create_stats::reset();
         }

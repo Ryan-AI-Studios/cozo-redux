@@ -30,12 +30,65 @@ static DIST_BATCHES: AtomicU64 = AtomicU64::new(0);
 static CACHE_HITS: AtomicU64 = AtomicU64::new(0);
 static CACHE_MISSES: AtomicU64 = AtomicU64::new(0);
 static CACHE_INSTANCES: AtomicU64 = AtomicU64::new(0);
+static CACHE_PEAK: AtomicU64 = AtomicU64::new(0);
+static STORE_GET_NS: AtomicU64 = AtomicU64::new(0);
+static STORE_GET_COUNT: AtomicU64 = AtomicU64::new(0);
 static PUT_NS: AtomicU64 = AtomicU64::new(0);
 static PUT_COUNT: AtomicU64 = AtomicU64::new(0);
 static HNSW_PUT_NS: AtomicU64 = AtomicU64::new(0);
 static HNSW_PUT_COUNT: AtomicU64 = AtomicU64::new(0);
 static CREATE_TOTAL_NS: AtomicU64 = AtomicU64::new(0);
 static COMMIT_NS: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(test)]
+mod exclusive {
+    use std::cell::Cell;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::{Mutex, MutexGuard};
+
+    thread_local! {
+        static HELD: Cell<bool> = const { Cell::new(false) };
+        static OWNER: Cell<bool> = const { Cell::new(false) };
+    }
+
+    static LOCK: Mutex<()> = Mutex::new(());
+    static OWNER_COUNT: AtomicU64 = AtomicU64::new(0);
+
+    struct HeldGuard;
+
+    impl Drop for HeldGuard {
+        fn drop(&mut self) {
+            OWNER.with(|o| o.set(false));
+            OWNER_COUNT.fetch_sub(1, Ordering::Release);
+            HELD.with(|h| h.set(false));
+        }
+    }
+
+    /// Serialize stats tests and mark this thread as the stats owner.
+    /// Rayon workers record while `OWNER_COUNT > 0`.
+    pub(crate) fn with_exclusive<R>(f: impl FnOnce() -> R) -> R {
+        if HELD.with(|h| h.get()) {
+            return f();
+        }
+        let _lock: MutexGuard<'static, ()> = LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        HELD.with(|h| h.set(true));
+        OWNER.with(|o| o.set(true));
+        OWNER_COUNT.fetch_add(1, Ordering::Release);
+        let _held = HeldGuard;
+        f()
+    }
+
+    pub(crate) fn is_owner_thread() -> bool {
+        OWNER.with(|o| o.get())
+    }
+
+    pub(crate) fn owner_count() -> u64 {
+        OWNER_COUNT.load(Ordering::Relaxed)
+    }
+}
+
+#[cfg(test)]
+pub(crate) use exclusive::with_exclusive;
 
 fn env_flag_on() -> bool {
     match std::env::var(ENV_NAME) {
@@ -65,6 +118,9 @@ fn zero_counters() {
     CACHE_HITS.store(0, Ordering::Relaxed);
     CACHE_MISSES.store(0, Ordering::Relaxed);
     CACHE_INSTANCES.store(0, Ordering::Relaxed);
+    CACHE_PEAK.store(0, Ordering::Relaxed);
+    STORE_GET_NS.store(0, Ordering::Relaxed);
+    STORE_GET_COUNT.store(0, Ordering::Relaxed);
     PUT_NS.store(0, Ordering::Relaxed);
     PUT_COUNT.store(0, Ordering::Relaxed);
     HNSW_PUT_NS.store(0, Ordering::Relaxed);
@@ -78,6 +134,22 @@ pub(crate) fn enabled() -> bool {
     env_flag_on()
 }
 
+/// Whether this thread should reset/dump create stats around `::hnsw create`.
+/// In tests, only the stats-owner thread may reset global counters.
+pub(crate) fn should_instrument_create() -> bool {
+    if !enabled() {
+        return false;
+    }
+    #[cfg(test)]
+    {
+        exclusive::is_owner_thread()
+    }
+    #[cfg(not(test))]
+    {
+        true
+    }
+}
+
 /// Re-read the env flag into the cached active bit and zero all counters.
 /// Tests must call this **after** setting the env var.
 pub(crate) fn reset() {
@@ -87,7 +159,22 @@ pub(crate) fn reset() {
 
 /// Cached flag. Hot paths must use this instead of `getenv`.
 pub(crate) fn is_active() -> bool {
-    ACTIVE.load(Ordering::Relaxed)
+    if !ACTIVE.load(Ordering::Relaxed) {
+        return false;
+    }
+    #[cfg(test)]
+    {
+        if exclusive::is_owner_thread() {
+            return true;
+        }
+        #[cfg(feature = "rayon")]
+        if rayon::current_thread_index().is_some() && exclusive::owner_count() > 0 {
+            return true;
+        }
+        false
+    }
+    #[cfg(not(test))]
+    true
 }
 
 pub(crate) fn record_scan(d: Duration) {
@@ -124,6 +211,24 @@ pub(crate) fn record_cache_instance() {
     if is_active() {
         CACHE_INSTANCES.fetch_add(1, Ordering::Relaxed);
     }
+}
+
+pub(crate) fn record_cache_peak(len: usize) {
+    if is_active() {
+        CACHE_PEAK.fetch_max(len as u64, Ordering::Relaxed);
+    }
+}
+
+/// Time a base-relation `handle.get` / `store_tx.get` on an `ensure_key` miss.
+pub(crate) fn time_store_get<T>(f: impl FnOnce() -> Result<T>) -> Result<T> {
+    if !is_active() {
+        return f();
+    }
+    STORE_GET_COUNT.fetch_add(1, Ordering::Relaxed);
+    let start = Instant::now();
+    let out = f();
+    add_ns(&STORE_GET_NS, start.elapsed());
+    out
 }
 
 pub(crate) fn time_dist_batch<T>(f: impl FnOnce() -> Result<T>) -> Result<T> {
@@ -191,6 +296,9 @@ pub(crate) struct HnswCreateStatsSnapshot {
     pub cache_hits: u64,
     pub cache_misses: u64,
     pub cache_instances: u64,
+    pub cache_peak: u64,
+    pub store_get_ns: u64,
+    pub store_get_count: u64,
     pub put_ns: u64,
     pub put_count: u64,
     pub hnsw_put_ns: u64,
@@ -223,6 +331,9 @@ impl HnswCreateStatsSnapshot {
             cache_hits: CACHE_HITS.load(Ordering::Relaxed),
             cache_misses: CACHE_MISSES.load(Ordering::Relaxed),
             cache_instances: CACHE_INSTANCES.load(Ordering::Relaxed),
+            cache_peak: CACHE_PEAK.load(Ordering::Relaxed),
+            store_get_ns: STORE_GET_NS.load(Ordering::Relaxed),
+            store_get_count: STORE_GET_COUNT.load(Ordering::Relaxed),
             put_ns,
             put_count: PUT_COUNT.load(Ordering::Relaxed),
             hnsw_put_ns: HNSW_PUT_NS.load(Ordering::Relaxed),
@@ -263,6 +374,11 @@ impl HnswCreateStatsSnapshot {
             "cache_hits": self.cache_hits,
             "cache_misses": self.cache_misses,
             "cache_instances": self.cache_instances,
+            "cache_peak": self.cache_peak,
+            "store_get_ns": self.store_get_ns,
+            "store_get_ms": Self::ms(self.store_get_ns),
+            "store_get_pct": Self::pct(self.store_get_ns, total),
+            "store_get_count": self.store_get_count,
             "put_ns": self.put_ns,
             "put_ms": Self::ms(self.put_ns),
             "put_pct": Self::pct(self.put_ns, total),

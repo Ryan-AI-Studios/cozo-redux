@@ -6,7 +6,7 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-//! Shared Ledgerful-shaped HNSW fixture for tracks 021 and 026.
+//! Shared Ledgerful-shaped HNSW fixture for tracks 021, 023, and 026.
 //! Seed 21768, dim 768, N=14000, unit-normalized F32, SQLite tempfile.
 
 use std::collections::BTreeMap;

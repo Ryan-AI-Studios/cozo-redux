@@ -24,6 +24,6 @@
 
 | Item | Value |
 | :--- | :--- |
-| Branch | `track/026-hnsw-fast-build-presets` |
-| PR | *(filled after open)* |
-| SHA | *(filled after squash-merge)* |
+| Branch | `track/026-hnsw-fast-build-presets` (deleted after squash) |
+| PR | [#2](https://github.com/Ryan-AI-Studios/cozo-redux/pull/2) |
+| SHA | `0447d02a` |

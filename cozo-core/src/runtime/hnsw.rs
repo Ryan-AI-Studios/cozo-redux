@@ -178,7 +178,7 @@ fn encode_vector_pq(vector: &Vector, codebook: &PqCodebook) -> Result<Vec<u8>> {
     Ok(codes)
 }
 
-struct VectorCache {
+pub(crate) struct VectorCache {
     cache: FxHashMap<CompoundKey, Vector>,
     distance: HnswDistance,
     pq_codebook: Option<PqCodebook>,
@@ -186,8 +186,18 @@ struct VectorCache {
 }
 
 impl VectorCache {
+    pub(crate) fn new(distance: HnswDistance) -> Self {
+        Self {
+            cache: FxHashMap::default(),
+            distance,
+            pq_codebook: None,
+            pq_codes: Default::default(),
+        }
+    }
+
     fn insert(&mut self, k: CompoundKey, v: Vector) {
         self.cache.insert(k, v);
+        hnsw_create_stats::record_cache_peak(self.cache.len());
     }
     fn dist(&self, v1: &Vector, v2: &Vector) -> Result<f64> {
         match self.distance {
@@ -272,7 +282,7 @@ impl VectorCache {
             }
         }
         if !cached {
-            match handle.get(tx, &key.0)? {
+            match hnsw_create_stats::time_store_get(|| handle.get(tx, &key.0))? {
                 Some(tuple) => {
                     let mut field = &tuple[key.1];
                     if key.2 >= 0 {
@@ -285,7 +295,7 @@ impl VectorCache {
                     }
                     match field {
                         DataValue::Vec(v) => {
-                            self.cache.insert(key.clone(), *v.clone());
+                            self.insert(key.clone(), *v.clone());
                         }
                         _ => bail!("Cannot interpret {} as vector", field),
                     }
@@ -1051,7 +1061,36 @@ impl<'a> SessionTx<'a> {
         tuple: &[DataValue],
     ) -> Result<bool> {
         hnsw_create_stats::record_hnsw_put(|| {
-            self.hnsw_put_body(manifest, orig_table, idx_table, filter, stack, tuple)
+            let mut vec_cache = VectorCache::new(manifest.distance);
+            self.hnsw_put_body(
+                manifest,
+                orig_table,
+                idx_table,
+                filter,
+                stack,
+                tuple,
+                &mut vec_cache,
+                true,
+            )
+        })
+    }
+
+    /// Create-path put that reuses one [`VectorCache`] across the full scan.
+    /// Incremental `query/stored.rs` keeps calling [`Self::hnsw_put`] (fresh cache).
+    pub(crate) fn hnsw_put_with_cache(
+        &mut self,
+        manifest: &HnswIndexManifest,
+        orig_table: &RelationHandle,
+        idx_table: &RelationHandle,
+        filter: Option<&Vec<Bytecode>>,
+        stack: &mut Vec<DataValue>,
+        tuple: &[DataValue],
+        vec_cache: &mut VectorCache,
+    ) -> Result<bool> {
+        hnsw_create_stats::record_hnsw_put(|| {
+            self.hnsw_put_body(
+                manifest, orig_table, idx_table, filter, stack, tuple, vec_cache, false,
+            )
         })
     }
 
@@ -1063,6 +1102,8 @@ impl<'a> SessionTx<'a> {
         filter: Option<&Vec<Bytecode>>,
         stack: &mut Vec<DataValue>,
         tuple: &[DataValue],
+        vec_cache: &mut VectorCache,
+        record_new_instance: bool,
     ) -> Result<bool> {
         if let Some(code) = filter {
             if !eval_bytecode_pred(code, tuple, stack, Default::default())? {
@@ -1088,23 +1129,12 @@ impl<'a> SessionTx<'a> {
         if extracted_vectors.is_empty() {
             return Ok(false);
         }
-        let mut vec_cache = VectorCache {
-            cache: FxHashMap::default(),
-            distance: manifest.distance,
-            pq_codebook: None,
-            pq_codes: Default::default(),
-        };
-        hnsw_create_stats::record_cache_instance();
+        if record_new_instance {
+            hnsw_create_stats::record_cache_instance();
+        }
         for (vec, idx, sub) in extracted_vectors {
             self.hnsw_put_vector(
-                tuple,
-                vec,
-                idx,
-                sub,
-                manifest,
-                orig_table,
-                idx_table,
-                &mut vec_cache,
+                tuple, vec, idx, sub, manifest, orig_table, idx_table, vec_cache,
             )?;
         }
         Ok(true)
