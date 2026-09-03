@@ -171,6 +171,10 @@ impl<'s> StoreTx<'s> for RocksDbTx {
         true
     }
 
+    fn is_concurrent_read_safe(&self) -> bool {
+        true
+    }
+
     #[inline]
     fn par_put(&self, key: &[u8], val: &[u8]) -> Result<()> {
         Ok(self.db_tx.put(key, val)?)

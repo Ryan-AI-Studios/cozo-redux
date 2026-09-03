@@ -9,7 +9,7 @@ Med/high never belong here — they block the owning track.
 
 | ID | Severity | Item | Notes | Owner |
 |---|---|---|---|---|
-| D-009-01 | — | Outer-loop parallel KNN (`StoreTx: is_concurrent_read_safe()`) | Phase 3 deferred on purpose. **029** spec Ready — not started. Live API is `SessionTx::hnsw_knn`. `SessionTx` is Sync (`StoreTx: Sync`); `StoreTx` is not Send. SQLite concurrent-read likely false (statement mutex convoy). May kill after Phase 1 workload note (Ledgerful is single-query); do **not** close this row in the 2026-09-02 fold-in. | **029** |
+| D-009-01 | — | Outer-loop parallel KNN (`StoreTx: is_concurrent_read_safe()`) | **029** KEEP: trait default false; SQLite explicit false; mem Reader / RocksDB / fjall true; chunked lazy rayon (threshold 8, `map_init` stacks). Ledgerful still single `$query_vec`; generic Cozo parent-join is the workload. Close when **029** squash-merges. | **029** |
 
 ## From Track 012 (PQ)
 

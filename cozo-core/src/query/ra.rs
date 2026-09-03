@@ -6,6 +6,8 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
+#[cfg(feature = "rayon")]
+use std::collections::VecDeque;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Formatter, Write};
 use std::iter;
@@ -1184,26 +1186,126 @@ impl HnswSearchRA {
         }
         let config = self.hnsw_search.clone();
         let filter_code = self.filter_bytecode.clone();
-        let mut stack = vec![];
-        let it = self
-            .parent
-            .iter(tx, delta_rule, stores)?
-            .map_ok(move |tuple| -> Result<_> {
-                let v = match tuple[bind_idx].clone() {
-                    DataValue::Vec(v) => *v,
-                    d => bail!("Expected vector, got {:?}", d),
-                };
+        let parent = self.parent.iter(tx, delta_rule, stores)?;
 
-                let res = tx.hnsw_knn(v, &config, &filter_code, &mut stack)?;
-                Ok(res.into_iter().map(move |t| {
-                    let mut r = tuple.clone();
-                    r.extend(t);
-                    r
-                }))
+        #[cfg(feature = "rayon")]
+        {
+            if tx.store_tx.is_concurrent_read_safe() {
+                return Ok(Box::new(HnswChunkedKnnIter {
+                    parent,
+                    tx,
+                    config,
+                    filter_code,
+                    bind_idx,
+                    pending: VecDeque::new(),
+                }));
+            }
+        }
+
+        let mut stack = vec![];
+        let it = parent
+            .map_ok(move |tuple| {
+                hnsw_expand_parent(tx, tuple, bind_idx, &config, &filter_code, &mut stack)
             })
             .map(flatten_err)
             .flatten_ok();
         Ok(Box::new(it))
+    }
+}
+
+fn hnsw_expand_parent(
+    tx: &SessionTx<'_>,
+    tuple: Tuple,
+    bind_idx: usize,
+    config: &HnswSearch,
+    filter_code: &Option<(Vec<Bytecode>, SourceSpan)>,
+    stack: &mut Vec<DataValue>,
+) -> Result<Vec<Tuple>> {
+    let v = match tuple[bind_idx].clone() {
+        DataValue::Vec(v) => *v,
+        d => bail!("Expected vector, got {:?}", d),
+    };
+    let res = tx.hnsw_knn(v, config, filter_code, stack)?;
+    Ok(res
+        .into_iter()
+        .map(|t| {
+            let mut r = tuple.clone();
+            r.extend(t);
+            r
+        })
+        .collect())
+}
+
+#[cfg(feature = "rayon")]
+const HNSW_PAR_PARENT_CHUNK: usize = 8;
+
+#[cfg(feature = "rayon")]
+struct HnswChunkedKnnIter<'a, 'tx> {
+    parent: TupleIter<'a>,
+    tx: &'a SessionTx<'tx>,
+    config: HnswSearch,
+    filter_code: Option<(Vec<Bytecode>, SourceSpan)>,
+    bind_idx: usize,
+    pending: VecDeque<Tuple>,
+}
+
+#[cfg(feature = "rayon")]
+impl Iterator for HnswChunkedKnnIter<'_, '_> {
+    type Item = Result<Tuple>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(t) = self.pending.pop_front() {
+                return Some(Ok(t));
+            }
+            let mut chunk = Vec::with_capacity(HNSW_PAR_PARENT_CHUNK);
+            for _ in 0..HNSW_PAR_PARENT_CHUNK {
+                match self.parent.next() {
+                    Some(Ok(t)) => chunk.push(t),
+                    Some(Err(e)) => return Some(Err(e)),
+                    None => break,
+                }
+            }
+            if chunk.is_empty() {
+                return None;
+            }
+            let expanded: Result<Vec<Vec<Tuple>>> = if chunk.len() >= HNSW_PAR_PARENT_CHUNK {
+                chunk
+                    .into_par_iter()
+                    .map_init(Vec::new, |stack, tuple| {
+                        hnsw_expand_parent(
+                            self.tx,
+                            tuple,
+                            self.bind_idx,
+                            &self.config,
+                            &self.filter_code,
+                            stack,
+                        )
+                    })
+                    .collect()
+            } else {
+                let mut stack = vec![];
+                chunk
+                    .into_iter()
+                    .map(|tuple| {
+                        hnsw_expand_parent(
+                            self.tx,
+                            tuple,
+                            self.bind_idx,
+                            &self.config,
+                            &self.filter_code,
+                            &mut stack,
+                        )
+                    })
+                    .collect()
+            };
+            match expanded {
+                Err(e) => return Some(Err(e)),
+                Ok(groups) => {
+                    self.pending.extend(groups.into_iter().flatten());
+                }
+            }
+        }
     }
 }
 

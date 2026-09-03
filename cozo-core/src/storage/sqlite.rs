@@ -204,6 +204,10 @@ impl<'s> StoreTx<'s> for SqliteTx<'s> {
         true
     }
 
+    fn is_concurrent_read_safe(&self) -> bool {
+        false
+    }
+
     fn par_put(&self, key: &[u8], val: &[u8]) -> Result<()> {
         self.ensure_stmt(PUT_QUERY);
         let mut statement = self.stmts[PUT_QUERY].lock().unwrap();
@@ -427,5 +431,22 @@ impl<'l> Iterator for SkipIter<'l> {
 
     fn next(&mut self) -> Option<Self::Item> {
         swap_option_result(self.next_inner())
+    }
+}
+
+#[cfg(test)]
+mod concurrent_read_flag_tests {
+    use super::*;
+
+    #[test]
+    fn sqlite_is_not_concurrent_read_safe() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("concurrent-read-flag.sqlite");
+        let db = new_cozo_sqlite(&path).unwrap();
+        let reader = db.db.transact(false).unwrap();
+        assert!(!reader.is_concurrent_read_safe());
+        drop(reader);
+        let writer = db.db.transact(true).unwrap();
+        assert!(!writer.is_concurrent_read_safe());
     }
 }

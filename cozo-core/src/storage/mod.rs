@@ -72,6 +72,14 @@ pub trait StoreTx<'s>: Sync {
     /// Should return true if the engine supports parallel put, false otherwise.
     fn supports_par_put(&self) -> bool;
 
+    /// True when `get`/`exists` on this transaction may run concurrently from
+    /// multiple threads sharing `&self`. Default false. SQLite stays false
+    /// (cached-statement mutex). Only override when the snapshot get is
+    /// actually concurrent-safe (mem read tx, RocksDB, fjall).
+    fn is_concurrent_read_safe(&self) -> bool {
+        false
+    }
+
     /// Put a key-value pair into the storage. In case of existing key,
     /// the storage engine needs to overwrite the old value.
     /// The difference between this one and `put` is the mutability of self.
