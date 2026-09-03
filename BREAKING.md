@@ -1,6 +1,22 @@
-# Breaking Changes in v0.8.1-redux
+# Breaking Changes in CozoDB-redux
 
 This document tracks breaking changes and migration requirements for users of the CozoDB-redux fork.
+
+## v0.8.2-redux — no new storage break
+
+Tracks **021–029** do **not** change on-disk layout, CozoScript `::hnsw create` syntax, or the embeddable `Db` / `DbInstance` API in a way that requires a data migration.
+
+**Behavior tightening** (only if you call `::hnsw train_pq`):
+
+* Cosine indexes now error (search LUT is L2-only). Previously this could run and produce wrong distances.
+* `centroids` outside `1..=256` now error at parse / train time.
+* After PQ search, reported `bind_distance` is exact L2 re-rank, not ADC.
+
+Default HNSW create and exact L2 search are unchanged. SQLite search remains sequential.
+
+The 0.8.1-redux items below still apply when coming from upstream CozoDB or a `sled` database.
+
+## v0.8.1-redux
 
 ## 1. Storage Migration: sled -> fjall (Track 019)
 
