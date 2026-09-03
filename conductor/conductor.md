@@ -6,7 +6,7 @@ Consumer of this fork: **Ledgerful** (`C:\dev\ledgerful`) git-deps CozoDB-redux 
 
 ## Active Tracks
 
-HNSW / create-speed **spikes**. **021 keep/kill is the authority** for 022–028. **023** KEEP (create-wide cache; 14k create 19.9→12.6 min). **025** measured skip-drop: **KILL** (B2 recall@10 vs A = 0.54; 16.0 min > A 11.9 min). **026** measured knobs: **KILL** a faster Ledgerful preset (stay `m:16`, `ef_construction:100`). **027** **KILL** construction-PQ (dist 14.55% of create; `train_pq` 20 s post-hoc). **029** In progress (parallel parent-tuple k-NN). Do not implement 022 / 024 / 028.
+HNSW / create-speed **spikes**. **021 keep/kill is the authority** for 022–028. **023** KEEP (create-wide cache; 14k create 19.9→12.6 min). **025** measured skip-drop: **KILL** (B2 recall@10 vs A = 0.54; 16.0 min > A 11.9 min). **026** measured knobs: **KILL** a faster Ledgerful preset (stay `m:16`, `ef_construction:100`). **027** **KILL** construction-PQ (dist 14.55% of create; `train_pq` 20 s post-hoc). **029** KEEP chunked parent-tuple k-NN (SQLite sequential). Spikes **021–029** complete. Next free ID: **030**. Do not implement 022 / 024 / 028.
 
 | Track ID | Status | Objective | Folder |
 | :--- | :--- | :--- | :--- |
@@ -18,7 +18,7 @@ HNSW / create-speed **spikes**. **021 keep/kill is the authority** for 022–028
 | **026** | Completed | Fast-build presets. **KILL** faster Ledgerful knobs; stay `m:16`, `ef_construction:100` | [track026-hnsw-fast-build-presets](track026-hnsw-fast-build-presets/) |
 | **027** | Completed | PQ on construction (`::hnsw train_pq`). **KILL** construction-PQ; L2 guard + centroid bound + re-rank | [track027-pq-on-construction](track027-pq-on-construction/) |
 | **028** | Killed (021) | GPU distance oracle. Dist does not dominate; mean batch ~20.8, not ≫ m | [track028-gpu-distance-oracle](track028-gpu-distance-oracle/) |
-| **029** | In progress | Track 009 Phase 3: parallel KNN across parent tuples (`SessionTx::hnsw_knn`; **D-009-01**) | [track029-parallel-knn-parent-tuples](track029-parallel-knn-parent-tuples/) |
+| **029** | Completed | Track 009 Phase 3: parallel KNN across parent tuples (`SessionTx::hnsw_knn`; **D-009-01**) | [track029-parallel-knn-parent-tuples](track029-parallel-knn-parent-tuples/) |
 
 Engine file for 021–029: `cozo-core/src/runtime/hnsw.rs`. Create path: `create_hnsw_index` → per-tuple `hnsw_put`.
 
@@ -27,13 +27,13 @@ Engine file for 021–029: `cozo-core/src/runtime/hnsw.rs`. Create path: `create
 | Item | Notes |
 | :--- | :--- |
 | Post-Codex remediations | Landed on `main` (`128012d4`): fjall feature/API rename, pyo3, vendor graph. Working tree is clean. Not a new track. |
-| Track 009 Phase 3 | Deferred on purpose; queued as **029** (Ready — not started). |
 | Track 012 PQ gaps | In-tree: `::hnsw train_pq`, encode, approx L2, exact re-rank, L2 `train_pq` guard, centroid `1..=256`. Construction-PQ **killed**. Convert won’t-do. D-012-01 remains open (cosine ADC). |
 
 ## Completed Tracks
 
 | Track ID | Objective | Landed |
 | :--- | :--- | :--- |
+| **029** | Parallel parent-tuple k-NN; KEEP concurrent-read gate; SQLite sequential | `d624d1de` (#6) |
 | **027** | PQ construction kill; L2 train_pq guard; centroid 1..=256; exact re-rank | `0e4f3e11` (#5) |
 | **025** | Incremental HNSW vs rebuild; KILL skip-drop; B2 recall 0.54, 16.0 min > A 11.9 min | `0899e084` (#4) |
 | **023** | Prefetch / cache-fill; KEEP create-wide VectorCache; 19.9→12.6 min | `056d189a` (#3) |
@@ -61,4 +61,4 @@ Engine file for 021–029: `cozo-core/src/runtime/hnsw.rs`. Create path: `create
 | **001** | Infrastructure & Security Patches (`lz4_flex`, `tokio`) — *partial: patch not transitive* |  |
 
 ---
-*Updated: 2026-09-02*
+*Updated: 2026-09-03*

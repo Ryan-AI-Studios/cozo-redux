@@ -9,7 +9,7 @@ Med/high never belong here — they block the owning track.
 
 | ID | Severity | Item | Notes | Owner |
 |---|---|---|---|---|
-| D-009-01 | — | Outer-loop parallel KNN (`StoreTx: is_concurrent_read_safe()`) | **029** KEEP: trait default false; SQLite explicit false; mem Reader / RocksDB / fjall true; chunked lazy rayon (threshold 8, `map_init` stacks). Ledgerful still single `$query_vec`; generic Cozo parent-join is the workload. Close when **029** squash-merges. | **029** |
+| D-009-01 | — | Outer-loop parallel KNN (`StoreTx: is_concurrent_read_safe()`) | **Closed.** **029** KEEP landed `d624d1de` (#6): trait default false; SQLite explicit false; mem Reader / RocksDB / fjall true; chunked lazy rayon (threshold 8, `map_init` stacks). Ledgerful still single `$query_vec`. | **029** |
 
 ## From Track 012 (PQ)
 

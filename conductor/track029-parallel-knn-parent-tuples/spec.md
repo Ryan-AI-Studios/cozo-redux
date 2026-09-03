@@ -2,7 +2,7 @@
 
 ## Status
 
-**In progress.** Owns **D-009-01**. Independent of create-speed 021–028.
+**Completed.** Owns **D-009-01**. Independent of create-speed 021–028.
 
 ## Objective
 
