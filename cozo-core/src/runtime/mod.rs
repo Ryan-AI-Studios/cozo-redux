@@ -21,6 +21,8 @@ mod hnsw_fixture;
 #[cfg(test)]
 mod hnsw_incremental_optimize_test;
 #[cfg(test)]
+mod hnsw_parallel_knn_test;
+#[cfg(test)]
 mod hnsw_pq_construction_test;
 #[cfg(test)]
 mod hnsw_prefetch_test;

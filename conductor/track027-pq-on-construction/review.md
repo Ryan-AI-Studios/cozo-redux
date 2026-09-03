@@ -25,5 +25,5 @@
 | Item | Value |
 | :--- | :--- |
 | Branch | `track/027-pq-on-construction` |
-| PR | *(filled after open)* |
-| SHA | *(filled after squash-merge)* |
+| PR | [#5](https://github.com/Ryan-AI-Studios/cozo-redux/pull/5) |
+| SHA | `0e4f3e11` |

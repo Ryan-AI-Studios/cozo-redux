@@ -131,6 +131,10 @@ impl<'s> StoreTx<'s> for MemTx<'s> {
         false
     }
 
+    fn is_concurrent_read_safe(&self) -> bool {
+        matches!(self, MemTx::Reader(_))
+    }
+
     fn par_put(&self, _key: &[u8], _val: &[u8]) -> Result<()> {
         panic!()
     }
@@ -557,5 +561,20 @@ impl<'a> Iterator for SkipDualIterator<'a> {
                 return Some(Ok(nk));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod concurrent_read_flag_tests {
+    use super::*;
+
+    #[test]
+    fn mem_reader_is_concurrent_read_safe() {
+        let db = new_cozo_mem().unwrap();
+        let reader = db.db.transact(false).unwrap();
+        assert!(reader.is_concurrent_read_safe());
+        drop(reader);
+        let writer = db.db.transact(true).unwrap();
+        assert!(!writer.is_concurrent_read_safe());
     }
 }

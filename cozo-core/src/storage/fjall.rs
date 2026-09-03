@@ -104,6 +104,10 @@ impl<'s> StoreTx<'s> for FjallTx {
         false
     }
 
+    fn is_concurrent_read_safe(&self) -> bool {
+        true
+    }
+
     #[inline]
     fn del(&mut self, key: &[u8]) -> Result<()> {
         self.changes.insert(key.to_vec(), None);

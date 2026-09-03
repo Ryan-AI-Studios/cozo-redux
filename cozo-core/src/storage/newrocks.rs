@@ -157,6 +157,11 @@ impl<'s> StoreTx<'s> for NewRocksDbTx<'s> {
         true
     }
 
+    fn is_concurrent_read_safe(&self) -> bool {
+        // rocksdb::Transaction is not concurrent-get safe.
+        false
+    }
+
     #[inline]
     fn par_put(&self, key: &[u8], val: &[u8]) -> Result<()> {
         match self.db_tx {
