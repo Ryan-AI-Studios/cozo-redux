@@ -6,7 +6,7 @@ Consumer of this fork: **Ledgerful** (`C:\dev\ledgerful`) git-deps CozoDB-redux 
 
 ## Active Tracks
 
-HNSW / create-speed **spikes**. **021 keep/kill is the authority** (`conductor/track021-hnsw-create-baseline/spec.md`, ef100 14k×768 SQLite Windows release). Next implement: **026** (shared fixture), then **023** (ensure_key 34%), then **025**. **029** is search-side. **027** still needs a `train_pq` vs L2 create measurement. Do not implement 022 / 024 / 028.
+HNSW / create-speed **spikes**. **021 keep/kill is the authority** for 022–028. **026** measured knobs: **KILL** a faster Ledgerful preset (stay `m:16`, `ef_construction:100`). Next implement: **023** (ensure_key 34%), then **025**. **029** is search-side. **027** still needs a `train_pq` vs L2 create measurement. Do not implement 022 / 024 / 028.
 
 | Track ID | Status | Objective | Folder |
 | :--- | :--- | :--- | :--- |
@@ -15,7 +15,7 @@ HNSW / create-speed **spikes**. **021 keep/kill is the authority** (`conductor/t
 | **023** | Ready — not started | Prefetch / cache-fill. **KEEP** — ensure_key **34.2%** | [track023-hnsw-prefetch](track023-hnsw-prefetch/) |
 | **024** | Killed (021) | Bulk create / put batching. Put **0.94%** ≪ 30% (count is high; wall is not) | [track024-hnsw-bulk-create](track024-hnsw-bulk-create/) |
 | **025** | Ready — not started | Incremental index / `::hnsw optimize`. **KEEP** — ~20 min drop+create is the product pain | [track025-hnsw-incremental-optimize](track025-hnsw-incremental-optimize/) |
-| **026** | Ready — not started | Fast-build presets (`ef` / `m`). **KEEP** (always). Share 021 fixture | [track026-hnsw-fast-build-presets](track026-hnsw-fast-build-presets/) |
+| **026** | Completed | Fast-build presets. **KILL** faster Ledgerful knobs; stay `m:16`, `ef_construction:100` | [track026-hnsw-fast-build-presets](track026-hnsw-fast-build-presets/) |
 | **027** | Ready — not started | PQ on construction (`::hnsw train_pq`). **Not KEEP** — `train_pq` not measured in 021 | [track027-pq-on-construction](track027-pq-on-construction/) |
 | **028** | Killed (021) | GPU distance oracle. Dist does not dominate; mean batch ~20.8, not ≫ m | [track028-gpu-distance-oracle](track028-gpu-distance-oracle/) |
 | **029** | Ready — not started | Track 009 Phase 3: parallel KNN across parent tuples (`SessionTx::hnsw_knn`; **D-009-01**) | [track029-parallel-knn-parent-tuples](track029-parallel-knn-parent-tuples/) |
@@ -34,7 +34,8 @@ Engine file for 021–029: `cozo-core/src/runtime/hnsw.rs`. Create path: `create
 
 | Track ID | Objective | Landed |
 | :--- | :--- | :--- |
-| **021** | HNSW create baseline (cost model); keep/kill for 022–028 | *(squash SHA after merge)* |
+| **026** | Fast-build presets; KILL faster Ledgerful knobs; stay m:16 ef_construction:100 | *(squash SHA after merge)* |
+| **021** | HNSW create baseline (cost model); keep/kill for 022–028 | `2710891b` (#1) |
 | **020** | tikv-client Remediation — 0.3→0.4 + vendor + tonic 0.11 | `ddf8138d` |
 | **019** | sled → fjall Storage Migration — unmaintained sled backend replaced; public feature is `storage-fjall` (`128012d4`) | `39d56a2e` |
 | **018** | graph/graph_builder fxhash Elimination — vendor + rustc-hash swap | `788a47c2` |

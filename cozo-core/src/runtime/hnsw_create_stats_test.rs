@@ -6,20 +6,13 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
-use ndarray::Array1;
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
-
-use crate::data::value::{DataValue, Vector};
 use crate::runtime::hnsw_create_stats::{self, HnswCreateStatsSnapshot};
-use crate::{DbInstance, NamedRows};
-
-const FIXTURE_SEED: u64 = 21_768;
-const FIXTURE_DIM: usize = 768;
-const FIXTURE_N: usize = 14_000;
+use crate::runtime::hnsw_fixture::{
+    hnsw_create, hnsw_drop, import_snippet_embeddings, open_sqlite_temp, FIXTURE_DIM, FIXTURE_N,
+    FIXTURE_SEED,
+};
 
 fn enable_create_stats() {
     // SAFETY: this module's tests set a process env flag only around HNSW create
@@ -43,61 +36,6 @@ impl Drop for StatsEnvGuard {
     fn drop(&mut self) {
         disable_create_stats();
     }
-}
-
-fn unit_normalized_rows(n: usize, dim: usize, seed: u64) -> Vec<Vec<DataValue>> {
-    let mut rng = StdRng::seed_from_u64(seed);
-    (0..n)
-        .map(|i| {
-            let mut v: Vec<f32> = (0..dim).map(|_| rng.gen::<f32>() * 2.0 - 1.0).collect();
-            let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt();
-            if norm > 0.0 {
-                for x in &mut v {
-                    *x /= norm;
-                }
-            }
-            vec![
-                DataValue::from(i as i64),
-                DataValue::Vec(Box::new(Vector::F32(Array1::from(v)))),
-            ]
-        })
-        .collect()
-}
-
-fn open_sqlite_temp() -> (tempfile::TempDir, DbInstance) {
-    let tmp = tempfile::tempdir().unwrap();
-    let path = tmp.path().join("hnsw-create.sqlite");
-    let db = DbInstance::new("sqlite", &path, "").unwrap();
-    (tmp, db)
-}
-
-fn import_snippet_embeddings(db: &DbInstance, n: usize, dim: usize, seed: u64) {
-    db.run_default(&format!(
-        ":create snippet_embedding {{id: Int => embedding: <F32; {dim}>}}"
-    ))
-    .unwrap();
-    let rows = unit_normalized_rows(n, dim, seed);
-    db.import_relations(BTreeMap::from([(
-        "snippet_embedding".to_string(),
-        NamedRows {
-            headers: vec!["id".to_string(), "embedding".to_string()],
-            rows: rows.into_iter().map(Into::into).collect(),
-            next: None,
-        },
-    )]))
-    .unwrap();
-}
-
-fn hnsw_create(db: &DbInstance, dim: usize, ef_construction: usize) {
-    db.run_default(&format!(
-        "::hnsw create snippet_embedding:snippet_idx {{ dim: {dim}, dtype: F32, fields: [embedding], distance: L2, m: 16, ef_construction: {ef_construction} }}"
-    ))
-    .unwrap();
-}
-
-fn hnsw_drop(db: &DbInstance) {
-    db.run_default("::hnsw drop snippet_embedding:snippet_idx")
-        .unwrap();
 }
 
 fn maybe_write_snapshot(snap: &HnswCreateStatsSnapshot, filename: &str) {

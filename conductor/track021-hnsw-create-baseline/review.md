@@ -39,6 +39,6 @@ Largest unowned bucket: graph/heaps **54.6%** → `docs/deferred.md` D-021-01.
 
 | Item | Value |
 | :--- | :--- |
-| Branch | `track/021-hnsw-create-baseline` |
-| PR | *(filled after open)* |
-| SHA | *(filled after squash-merge)* |
+| Branch | `track/021-hnsw-create-baseline` (deleted after squash) |
+| PR | [#1](https://github.com/Ryan-AI-Studios/cozo-redux/pull/1) |
+| SHA | `2710891b` |
