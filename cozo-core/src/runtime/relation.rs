@@ -1018,6 +1018,12 @@ impl<'a> SessionTx<'a> {
     }
 
     pub(crate) fn create_hnsw_index(&mut self, config: &HnswIndexConfig) -> Result<()> {
+        crate::runtime::hnsw_create_stats::record_create_total(|| {
+            self.create_hnsw_index_body(config)
+        })
+    }
+
+    fn create_hnsw_index_body(&mut self, config: &HnswIndexConfig) -> Result<()> {
         // Get relation handle
         let mut rel_handle = self.get_relation(&config.base_relation, true)?;
 
@@ -1163,8 +1169,13 @@ impl<'a> SessionTx<'a> {
 
         // populate index
         let mut all_tuples = TempCollector::default();
+        let scan_start =
+            crate::runtime::hnsw_create_stats::is_active().then(web_time::Instant::now);
         for tuple in rel_handle.scan_all(self) {
             all_tuples.push(tuple?);
+        }
+        if let Some(start) = scan_start {
+            crate::runtime::hnsw_create_stats::record_scan(start.elapsed());
         }
         let filter = if let Some(f_code) = &manifest.index_filter {
             let parsed = CozoScriptParser::parse(Rule::expr, f_code)
@@ -1206,7 +1217,7 @@ impl<'a> SessionTx<'a> {
         rel_handle
             .serialize(&mut Serializer::new(&mut meta_val))
             .map_err(|e| miette!("failed to serialize metadata: {e}"))?;
-        self.store_tx.put(&new_encoded, &meta_val)?;
+        self.hnsw_store_put(&new_encoded, &meta_val)?;
 
         Ok(())
     }

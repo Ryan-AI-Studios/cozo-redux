@@ -25,6 +25,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Install liburing (io-uring feature from --all-features)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y liburing-dev pkg-config
+
       - name: Format check
         run: cargo fmt --all -- --check
 
