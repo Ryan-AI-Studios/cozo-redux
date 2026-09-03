@@ -27,5 +27,5 @@
 | Item | Value |
 | :--- | :--- |
 | Branch | `track/029-parallel-knn-parent-tuples` |
-| PR | *(filled after open)* |
-| SHA | *(filled after squash-merge)* |
+| PR | [#6](https://github.com/Ryan-AI-Studios/cozo-redux/pull/6) |
+| SHA | `d624d1de` |

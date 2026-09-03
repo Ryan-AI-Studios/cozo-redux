@@ -2,7 +2,7 @@
 
 ## Status
 
-**In progress.** Re-read track 009 spec/plan Phase 3 and `docs/deferred.md` D-009-01 at execute. Not blocked on 021.
+**Completed.** Re-read track 009 spec/plan Phase 3 and `docs/deferred.md` D-009-01 at execute. Not blocked on 021.
 
 ## Phases (map to DoD)
 
