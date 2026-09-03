@@ -68,11 +68,12 @@ This fork is actively maintained for production use. Key changes since upstream:
 * **Storage Optimizations** — `TempStore` write-buffering, allocation-free range scans, fjall range bound elimination (Track 008).
 * **HNSW Graph Repair** — automatic reconnection of neighbors on node deletion to prevent graph disconnection (Track 010).
 * **HNSW Predicate Filtering** — in-loop predicate filtering with biased traversal and `ef` expansion (Track 011).
-* **Product Quantization** — `::hnsw train_pq` for codebook training, vector encoding, and approximate distance search (Track 012).
-* **Search Performance** — parallel FTS sort and batched HNSW distance computation (Track 009).
-* **Dependency Modernization** — `lz4_flex`, `tokio`, `web-time`, `postcard`, and security tooling (Tracks 001–005).
+* **Product Quantization** — `::hnsw train_pq` for codebook training, vector encoding, and approximate distance search (Track 012). L2-only train, centroid `1..=256`, exact re-rank (Track 027).
+* **Search Performance** — parallel FTS sort and batched HNSW distance computation (Track 009); chunked parallel parent-tuple k-NN on concurrent-read-safe backends (Track 029; SQLite sequential).
+* **HNSW create cache** — one `VectorCache` for the whole `::hnsw create` (Track 023).
+* **Dependency Modernization** — `lz4_flex`, `tokio`, `web-time`, `postcard`, fjall, pyo3 0.29, tikv-client 0.4, and security tooling (Tracks 001–005, 015–020).
 
-All changes are additive or internal optimizations. Existing CozoScript syntax, APIs, and storage formats remain compatible.
+CozoScript `::hnsw create` and default exact-L2 search stay compatible. **0.8.1-redux** replaced `sled` with `fjall` (incompatible on-disk format) and upgraded pyo3 / tikv-client — see [BREAKING.md](BREAKING.md). **0.8.2-redux** has no further storage-format break; notes are in [RELEASES.md](RELEASES.md).
 
 ## Introduction
 

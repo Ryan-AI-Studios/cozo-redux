@@ -1,5 +1,32 @@
 # CozoDB-redux Release Notes
 
+## v0.8.2-redux
+
+HNSW create/search spikes **021–029**. No on-disk format change. Ledgerful `::hnsw create { dim, dtype: F32, fields, distance: L2, m, ef_construction }` is unchanged.
+
+### Performance (KEEP)
+
+* **Create-wide VectorCache** (Track 023) — `::hnsw create` reuses one vector cache for the whole build. 14k×768 SQLite create dropped from ~19.9 min to ~12.6 min. Incremental `:put` still uses a fresh cache.
+* **Parallel parent-tuple k-NN** (Track 029) — `HnswSearchRA` runs parent rows in lazy chunks of 8 when the storage snapshot is concurrent-read-safe (mem read txs, RocksDB, fjall). SQLite stays sequential. Same neighbors as sequential eval.
+
+### Measured and not shipped (KILL)
+
+* SIMD wide L2 (022), bulk create (024), skip-drop incremental rebuild (025), faster Ledgerful `m`/`ef_construction` presets (026), construction-time PQ (027), GPU distance oracle (028). Stay `m:16`, `ef_construction:100`. No `::hnsw optimize`.
+
+### Compatibility tightening (`::hnsw train_pq`)
+
+* `train_pq` requires L2. Cosine indexes are rejected (LUT is L2-only).
+* `centroids` must be `1..=256`.
+* PQ search re-ranks survivors with exact `v_dist`. `bind_distance` is exact L2, not ADC.
+
+`hnsw_convert_to_pq` is not implemented. Cosine ADC is still absent (D-012-01).
+
+### Compatibility
+
+* No storage-format break vs 0.8.1-redux. Existing SQLite / RocksDB / fjall / mem databases open as before.
+* `StoreTx::is_concurrent_read_safe` is new with default `false` (additive).
+* See [BREAKING.md](BREAKING.md) for 0.8.1-redux storage/API breaks that still apply when upgrading from upstream 0.8.0 or `sled`.
+
 ## v0.8.1-redux
 
 This release focuses on critical security remediations, storage backend modernization, and dependency decoupling across 6 major development tracks.
@@ -56,4 +83,3 @@ This is the consolidated release of the CozoDB-redux fork, incorporating 14 majo
 * Preserves all upstream CozoScript syntax.
 * Backward-compatible `HnswIndexManifest` loading.
 * Full test suite validation (246 tests).
-
