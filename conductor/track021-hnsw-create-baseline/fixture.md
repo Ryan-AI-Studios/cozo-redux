@@ -20,6 +20,8 @@ Repeatable SQLite rebuild used for the Windows cost table in `results.md`.
 
 Generation: each row draws 768 uniform `f32` values in `[-1, 1]`, then L2-normalizes (matches Ledgerful normalize-before-put). Import is `DbInstance::import_relations` with `NamedRows` and `DataValue::Vec(Box::new(Vector::F32(Array1::from(v))))`.
 
+Shared helpers (021 + 026): `cozo-core/src/runtime/hnsw_fixture.rs` (`FIXTURE_SEED` / `FIXTURE_DIM` / `FIXTURE_N`, generator, sqlite tempfile, `::hnsw create` / drop). If a **release** 14k run OOMs or exceeds ~45 minutes, set `FIXTURE_N` in that file (not in `hnsw_create_stats_test.rs`).
+
 ## Commands (PowerShell)
 
 From `C:\dev\CozoDB-redux`. Do not overlap cargo jobs. Never use `&&`.
@@ -38,7 +40,7 @@ $env:COZO_HNSW_CREATE_STATS_OUT='C:\dev\CozoDB-redux\conductor\track021-hnsw-cre
 cargo test -p cozo --lib hnsw_create_baseline_14k --release -- --ignored --nocapture
 ```
 
-Debug (no `--release`) is the literal unit-test command; do not use it for the cost table. If a **release** 14k run OOMs or exceeds ~45 minutes, set `FIXTURE_N` in `cozo-core/src/runtime/hnsw_create_stats_test.rs` to `10_000` (still in spec range) and record that in `results.md`. The 2026-09-02 Windows run kept N=14000 in release (~31 min test wall).
+Debug (no `--release`) is the literal unit-test command; do not use it for the cost table. If a **release** 14k run OOMs or exceeds ~45 minutes, set `FIXTURE_N` in `cozo-core/src/runtime/hnsw_fixture.rs` to `10_000` (still in spec range) and record that in `results.md`. The 2026-09-02 Windows run kept N=14000 in release (~31 min test wall).
 
 JSON snapshots:
 

@@ -14,6 +14,10 @@ pub(crate) mod hnsw;
 pub(crate) mod hnsw_create_stats;
 #[cfg(test)]
 mod hnsw_create_stats_test;
+#[cfg(test)]
+mod hnsw_fast_build_presets_test;
+#[cfg(test)]
+mod hnsw_fixture;
 pub(crate) mod imperative;
 pub(crate) mod minhash_lsh;
 pub(crate) mod relation;
