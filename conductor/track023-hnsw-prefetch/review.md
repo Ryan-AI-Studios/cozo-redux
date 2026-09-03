@@ -28,6 +28,6 @@
 
 | Item | Value |
 | :--- | :--- |
-| Branch | `track/023-hnsw-prefetch` |
-| PR | *(filled after open)* |
-| SHA | *(filled after squash-merge)* |
+| Branch | `track/023-hnsw-prefetch` (deleted after squash) |
+| PR | [#3](https://github.com/Ryan-AI-Studios/cozo-redux/pull/3) |
+| SHA | `056d189a` |

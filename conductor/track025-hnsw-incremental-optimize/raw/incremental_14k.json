@@ -1,0 +1,19 @@
+{
+  "batch": 500,
+  "batches": 8,
+  "build_a_create_ms": 716885.6332,
+  "build_b2_append_ms": 503924.83499999996,
+  "build_b2_create_n0_ms": 456502.1339,
+  "build_b2_total_ms": 960426.9689,
+  "dim": 768,
+  "k": 10,
+  "keep_band": 0.9,
+  "keep_quality": false,
+  "n": 14000,
+  "n0": 10000,
+  "n_queries": 50,
+  "put_mode": "one_script_per_batch",
+  "query_ef": 100,
+  "recall_at_10_vs_a": 0.54,
+  "rows_per_put_script": 500
+}
