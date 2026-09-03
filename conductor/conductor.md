@@ -6,13 +6,13 @@ Consumer of this fork: **Ledgerful** (`C:\dev\ledgerful`) git-deps CozoDB-redux 
 
 ## Active Tracks
 
-HNSW / create-speed **spikes**. **021 keep/kill is the authority** for 022–028. **026** measured knobs: **KILL** a faster Ledgerful preset (stay `m:16`, `ef_construction:100`). Next implement: **023** (ensure_key 34%), then **025**. **029** is search-side. **027** still needs a `train_pq` vs L2 create measurement. Do not implement 022 / 024 / 028.
+HNSW / create-speed **spikes**. **021 keep/kill is the authority** for 022–028. **023** KEEP (create-wide cache; 14k create 19.9→12.6 min). **026** measured knobs: **KILL** a faster Ledgerful preset (stay `m:16`, `ef_construction:100`). Next implement: **025**. **029** is search-side. **027** still needs a `train_pq` vs L2 create measurement. Do not implement 022 / 024 / 028.
 
 | Track ID | Status | Objective | Folder |
 | :--- | :--- | :--- | :--- |
 | **021** | Completed | Baseline: split `::hnsw create` wall clock. ef100: graph/heaps 54.6%, ensure_key 34.2%, dist 10.3%, put 0.94%, ~20 min | [track021-hnsw-create-baseline](track021-hnsw-create-baseline/) |
 | **022** | Killed (021) | SIMD / wide CPU L2. Dist **10.3%** < 25%; ensure_key+put ≫ dist | [track022-simd-cpu-l2](track022-simd-cpu-l2/) |
-| **023** | Ready — not started | Prefetch / cache-fill. **KEEP** — ensure_key **34.2%** | [track023-hnsw-prefetch](track023-hnsw-prefetch/) |
+| **023** | In progress | Prefetch / cache-fill. **KEEP** — ensure_key **34.2%** | [track023-hnsw-prefetch](track023-hnsw-prefetch/) |
 | **024** | Killed (021) | Bulk create / put batching. Put **0.94%** ≪ 30% (count is high; wall is not) | [track024-hnsw-bulk-create](track024-hnsw-bulk-create/) |
 | **025** | Ready — not started | Incremental index / `::hnsw optimize`. **KEEP** — ~20 min drop+create is the product pain | [track025-hnsw-incremental-optimize](track025-hnsw-incremental-optimize/) |
 | **026** | Completed | Fast-build presets. **KILL** faster Ledgerful knobs; stay `m:16`, `ef_construction:100` | [track026-hnsw-fast-build-presets](track026-hnsw-fast-build-presets/) |
@@ -34,7 +34,7 @@ Engine file for 021–029: `cozo-core/src/runtime/hnsw.rs`. Create path: `create
 
 | Track ID | Objective | Landed |
 | :--- | :--- | :--- |
-| **026** | Fast-build presets; KILL faster Ledgerful knobs; stay m:16 ef_construction:100 | *(squash SHA after merge)* |
+| **026** | Fast-build presets; KILL faster Ledgerful knobs; stay m:16 ef_construction:100 | `0447d02a` (#2) |
 | **021** | HNSW create baseline (cost model); keep/kill for 022–028 | `2710891b` (#1) |
 | **020** | tikv-client Remediation — 0.3→0.4 + vendor + tonic 0.11 | `ddf8138d` |
 | **019** | sled → fjall Storage Migration — unmaintained sled backend replaced; public feature is `storage-fjall` (`128012d4`) | `39d56a2e` |
